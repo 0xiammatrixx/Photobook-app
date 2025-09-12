@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_frontend/app/splashscreen/splashscreen.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_frontend/features/auth/authscreen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final seenOnboarding = prefs.getBool('seenOnboarding') ?? false;
+
+  runApp(MyApp(seenOnboarding: seenOnboarding));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool seenOnboarding;
+  const MyApp({super.key, required this.seenOnboarding});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'PhotoBook',
-      home: OnboardingPage(),
+      theme: ThemeData(
+        textTheme: GoogleFonts.quicksandTextTheme(Theme.of(context).textTheme)
+      ),
+      home: seenOnboarding ? SignUpPage() : OnboardingPage(),
     );
   }
 }

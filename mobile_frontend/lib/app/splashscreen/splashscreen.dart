@@ -15,66 +15,66 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   final List<Widget> pages = [
     OnboardingSlide(
-      imagePath: "assets/splash1.png",
+      imagePath: "assets/splash1.svg",
       titleSpans: [
         TextSpan(
-          text: "Capture ",
+          text: "Capture moments, ",
           style: TextStyle(
             color: Color(0xFFFF7A33),
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
+            fontSize: 35,
+            fontWeight: FontWeight.w700,
           ),
         ),
         TextSpan(
-          text: "moments, Connect with creatives",
+          text: "Connect with creatives",
           style: TextStyle(
             color: Colors.black,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
+            fontSize: 25,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
       description: "Book professional photographers anytime, anywhere.",
     ),
     OnboardingSlide(
-      imagePath: "assets/splash2.png",
+      imagePath: "assets/splash2.svg",
       titleSpans: [
         TextSpan(
           text: "Find talents ",
           style: TextStyle(
-            color: Colors.black,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
+            color: Color(0xFFFF7A33),
+            fontSize: 35,
+            fontWeight: FontWeight.w700,
           ),
         ),
         TextSpan(
           text: "nearby",
           style: TextStyle(
-            color: Color(0xFFFF7A33),
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
+            color: Colors.black,
+            fontSize: 35,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
       description: "Photographers are near you!",
     ),
     OnboardingSlide(
-      imagePath: "assets/splash3.png",
+      imagePath: "assets/splash3.svg",
       titleSpans: [
         TextSpan(
-          text: "Book ",
+          text: "Book in ",
           style: TextStyle(
             color: Color(0xFFFF7A33),
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
+            fontSize: 35,
+            fontWeight: FontWeight.w700,
           ),
         ),
         TextSpan(
-          text: "in Minutes!",
+          text: "Minutes!",
           style: TextStyle(
             color: Colors.black,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
+            fontSize: 35,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -86,6 +86,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: Column(
         children: [
           Expanded(
@@ -106,7 +107,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 height: _currentPage == index ? 12 : 8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _currentPage == index ? Colors.blue : Colors.grey,
+                  color: _currentPage == index ? Color(0xFFFF7A33) : Color(0xFFE0E0E0),
                 ),
               ),
             ),
@@ -120,6 +121,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     icon: Icon(
                       Icons.arrow_circle_left_outlined,
                       color: Color(0xFFFF7A33),
+                      size: 35,
                     ),
                     onPressed: () async {
                       _controller.previousPage(
@@ -140,6 +142,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   icon: Icon(
                     Icons.arrow_circle_right_outlined,
                     color: Color(0xFFFF7A33),
+                    size: 35,
                   ),
                   onPressed: () async {
                     if (_currentPage == pages.length - 1) {
@@ -168,10 +171,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
 class OnboardingSlide extends StatelessWidget {
   final String imagePath;
-  final List<TextSpan> titleSpans; // instead of just "title"
+  final List<TextSpan> titleSpans;
   final String description;
 
   const OnboardingSlide({
+    super.key,
     required this.imagePath,
     required this.titleSpans,
     required this.description,
@@ -184,17 +188,17 @@ class OnboardingSlide extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Expanded(child: Image.asset(imagePath, fit: BoxFit.contain)),
-          const SizedBox(height: 30),
+          Expanded(child: SvgPicture.asset(imagePath, fit: BoxFit.contain)),
+          const SizedBox(height: 5),
           RichText(
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.start,
             text: TextSpan(children: titleSpans),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
           Text(
             description,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, color: Colors.grey),
+            textAlign: TextAlign.start,
+            style: TextStyle(fontSize: 20, color: Color(0xFF181818), fontWeight: FontWeight.w400),
           ),
           const SizedBox(height: 40),
         ],
@@ -205,30 +209,51 @@ class OnboardingSlide extends StatelessWidget {
 
 class ReadyPage extends StatelessWidget {
   const ReadyPage({super.key});
-  
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeigth = MediaQuery.of(context).size.height;
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
+        // centers the whole Column block
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Expanded(child: SvgPicture.asset('assets/bro.svg', fit: BoxFit.contain, height: screenHeigth * 0.4,)),
-              const SizedBox(height: 30),
-              Text('Ready! Set!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              CustomButton(text: 'Click', width: screenWidth * 0.3, onPressed: (){
-                Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => LoginPage()),
-                      );
-              })
+              SvgPicture.asset('assets/bro.svg', height: screenHeight * 0.4),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: screenWidth * 0.8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Ready! Set!',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF181818)
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    CustomButton(
+                      text: 'Click',
+                      width: screenWidth * 0.8,
+                      onPressed: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => SignUpPage()),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

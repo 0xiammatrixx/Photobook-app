@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class CustomButton extends StatelessWidget {
   final String text;
   final double? width; 
+  final double? height;
   final VoidCallback onPressed;
 
   const CustomButton({
@@ -10,20 +11,22 @@ class CustomButton extends StatelessWidget {
     required this.text,
     required this.onPressed,
     this.width,
+    this.height,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: width ?? double.infinity, // default to full width if not provided
+      width: width ?? double.infinity, 
+      height: height ?? 40,
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFFF7A33),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8), // basic curved edges
+            borderRadius: BorderRadius.circular(8), 
           ),
-          padding: const EdgeInsets.symmetric(vertical: 16), // vertical padding
+          padding: const EdgeInsets.symmetric(vertical: 8),
         ),
         child: Text(
           text,
