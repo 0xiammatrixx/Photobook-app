@@ -47,7 +47,10 @@ class _SignUpFormState extends State<SignUpForm> {
             controller: _nameController,
             decoration: const InputDecoration(
               labelText: 'Full Name',
-              border: OutlineInputBorder(),
+              border: OutlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
             ),
             validator: (value) =>
                 value == null || value.isEmpty ? 'Enter your name' : null,
@@ -59,7 +62,10 @@ class _SignUpFormState extends State<SignUpForm> {
             controller: _emailController,
             decoration: const InputDecoration(
               labelText: 'Email address',
-              border: OutlineInputBorder(),
+              border: OutlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
             ),
             keyboardType: TextInputType.emailAddress,
             validator: (value) {
@@ -75,7 +81,10 @@ class _SignUpFormState extends State<SignUpForm> {
             controller: _passwordController,
             decoration: const InputDecoration(
               labelText: 'Password',
-              border: OutlineInputBorder(),
+              border: OutlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
             ),
             obscureText: true,
             validator: (value) => value == null || value.length < 6
@@ -97,7 +106,7 @@ class _SignUpFormState extends State<SignUpForm> {
           const Text(
             'By clicking continue, you agree to our Terms of Service and Privacy Policy',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Colors.black54),
+            style: TextStyle(fontSize: 12, color: Color(0xFF181818)),
           ),
 
           const SizedBox(height: 24),
@@ -121,6 +130,13 @@ class _SignUpFormState extends State<SignUpForm> {
             height: 50,
             child: OutlinedButton.icon(
               onPressed: _signInWithGoogle,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Color(0xFFEEEEEE),
+                side: BorderSide(color: Color(0xFFEEEEEE)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
               icon: SvgPicture.asset('assets/googleicon.svg', height: 20),
               label: const Text(
                 'Continue with Google',
@@ -139,6 +155,13 @@ class _SignUpFormState extends State<SignUpForm> {
             height: 50,
             child: OutlinedButton.icon(
               onPressed: _signInWithFacebook,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Color(0xFFEEEEEE),
+                side: BorderSide(color: Color(0xFFEEEEEE)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
               icon: SvgPicture.asset('assets/facebookicon.svg', height: 20),
               label: const Text(
                 'Continue with Facebook',
