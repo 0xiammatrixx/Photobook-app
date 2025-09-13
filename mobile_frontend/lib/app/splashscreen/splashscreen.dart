@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:mobile_frontend/app/buttons.dart';
-import 'package:mobile_frontend/features/auth/authscreen.dart';
+import 'package:mobile_frontend/features/auth/signup/SignUpScreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingPage extends StatefulWidget {

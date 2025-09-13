@@ -11,26 +11,35 @@ class VerificationPage extends StatelessWidget {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Text(
-                'Verification',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+          child: SizedBox(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                SizedBox( width: 264,
+                  child: Column(
+                    children: [
+                      Text(
+                        'Verification',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Enter the 6 digit code sent to your registered mail',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.black, fontSize: 14),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Enter the 6 digit code sent to your registered mail',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.black, fontSize: 14),
-              ),
-              SizedBox(height: 40),
 
-              VerificationForm()
-            ],
+                SizedBox(height: 40),
+
+                VerificationForm(),
+              ],
+            ),
           ),
         ),
       ),

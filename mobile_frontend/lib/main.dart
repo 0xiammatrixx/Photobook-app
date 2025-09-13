@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_frontend/app/splashscreen/splashscreen.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:mobile_frontend/features/auth/authscreen.dart';
+import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
+import 'package:mobile_frontend/features/auth/passwordreset/passwordmail.dart';
+import 'package:mobile_frontend/features/auth/signup/SignUpScreen.dart';
 import 'package:mobile_frontend/features/auth/verificationscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,7 +27,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         textTheme: GoogleFonts.quicksandTextTheme(Theme.of(context).textTheme)
       ),
-      home: VerificationPage(), //seenOnboarding ? SignUpPage() : OnboardingPage(),
+      home: MailSent(), //seenOnboarding ? SignUpPage() : OnboardingPage(),
     );
   }
 }
