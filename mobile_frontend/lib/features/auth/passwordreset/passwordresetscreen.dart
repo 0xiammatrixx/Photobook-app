@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:mobile_frontend/app/buttons.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
+import 'package:mobile_frontend/features/auth/passwordreset/passwordmail.dart';
 
 class PasswordResetPage extends StatelessWidget {
   const PasswordResetPage({super.key});
@@ -11,48 +12,50 @@ class PasswordResetPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(backgroundColor: Colors.white, elevation: 0),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              SizedBox(height: 80),
-              SizedBox(
-                height: 170,
-                width: 215,
-                child: Stack(
-                  children: [
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: SvgPicture.asset('assets/forgotlock.svg'),
-                    ),
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      child: SvgPicture.asset('assets/speechbubble.svg'),
-                    ),
-                  ],
+      body: SingleChildScrollView(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              children: [
+                SizedBox(height: 80),
+                SizedBox(
+                  height: 170,
+                  width: 215,
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: SvgPicture.asset('assets/forgotlock.svg'),
+                      ),
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        child: SvgPicture.asset('assets/speechbubble.svg'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              SizedBox(height: 50),
-              Text(
-                'Forgot Password',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 4),
-              Text(
-                'Enter the verified email address used when creating this account',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
+                SizedBox(height: 50),
+                Text(
+                  'Forgot Password',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 20),
-              ForgotPasswordForm(),
-            ],
+                SizedBox(height: 4),
+                Text(
+                  'Enter the verified email address used when creating this account',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 20),
+                ForgotPasswordForm(),
+              ],
+            ),
           ),
         ),
       ),
@@ -113,7 +116,7 @@ class _ForgotPasswordFormState extends State<ForgotPasswordForm> {
                 print("Sending code");
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => PasswordResetPage()),
+                  MaterialPageRoute(builder: (_) => MailSent()),
                 );
               }
             },
