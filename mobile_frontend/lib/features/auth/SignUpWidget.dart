@@ -1,6 +1,8 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mobile_frontend/app/buttons.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SignUpForm extends StatefulWidget {
   const SignUpForm({super.key});
@@ -51,6 +53,9 @@ class _SignUpFormState extends State<SignUpForm> {
                 borderSide: BorderSide(color: Color(0xFFE0E0E0)),
                 borderRadius: BorderRadius.all(Radius.circular(8)),
               ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFFFF7A33)),
+              ),
             ),
             validator: (value) =>
                 value == null || value.isEmpty ? 'Enter your name' : null,
@@ -65,6 +70,9 @@ class _SignUpFormState extends State<SignUpForm> {
               border: OutlineInputBorder(
                 borderSide: BorderSide(color: Color(0xFFE0E0E0)),
                 borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFFFF7A33)),
               ),
             ),
             keyboardType: TextInputType.emailAddress,
@@ -85,6 +93,9 @@ class _SignUpFormState extends State<SignUpForm> {
                 borderSide: BorderSide(color: Color(0xFFE0E0E0)),
                 borderRadius: BorderRadius.all(Radius.circular(8)),
               ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFFFF7A33)),
+              ),
             ),
             obscureText: true,
             validator: (value) => value == null || value.length < 6
@@ -103,10 +114,54 @@ class _SignUpFormState extends State<SignUpForm> {
 
           const SizedBox(height: 24),
 
-          const Text(
-            'By clicking continue, you agree to our Terms of Service and Privacy Policy',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Color(0xFF181818)),
+          RichText(
+            text: TextSpan(
+              text: 'By clicking continue, you agree to our ',
+              style: TextStyle(
+                color: Color(0xFF181818),
+                fontWeight: FontWeight.w400,
+              ),
+              children: [
+                TextSpan(
+                  text: 'Terms of Service',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF181818),
+                  ),
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () async {
+                      final url = Uri.parse("https://example.com/terms");
+                      if (await canLaunchUrl(url, )) {
+                        launchUrl(url, mode: LaunchMode.externalApplication,);
+                      }
+                      print("Terms of Service clicked");
+                    },
+                ),
+                TextSpan(
+                  text: ' and ',
+                  style: TextStyle(
+                    color: Color(0xFF181818),
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                TextSpan(
+                  text: 'Privacy Policy',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF181818),
+                  ),
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () async {
+                      final url = Uri.parse("https://example.com/privacy");
+                      if (await canLaunchUrl(url)) {
+                        launchUrl(url, mode: LaunchMode.externalApplication);
+                      }
+                      print("Privacy Policy clicked");
+                    },
+                ),
+                TextSpan(text: '.'),
+              ],
+            ),
           ),
 
           const SizedBox(height: 24),
