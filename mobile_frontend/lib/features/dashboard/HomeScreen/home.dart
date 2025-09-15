@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:mobile_frontend/features/dashboard/placeholdercard.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -12,7 +13,7 @@ class HomeScreen extends StatelessWidget {
       {"name": "Zero to 1 Photos", "rating": 5},
     ];
 
-    final List<String> categories = ["Weddings", "Birthdays", "Products"];
+    final List<String> categories = ["assets/weddings.svg", "assets/birthdays.svg", "assets/products.svg"];
 
     return Scaffold(
       body: SafeArea(
@@ -29,7 +30,7 @@ class HomeScreen extends StatelessWidget {
               TextField(
                 decoration: InputDecoration(
                   hintText: "Search for creatives by style, genre, location...",
-                  fillColor: Colors.orange.shade50,
+                  fillColor: Color(0xFFFF7A33).withOpacity(0.05),
                   filled: true,
                   prefixIcon: const Icon(Icons.search),
                   border: OutlineInputBorder(
@@ -77,7 +78,7 @@ class HomeScreen extends StatelessWidget {
                         color: Colors.grey.shade200,
                       ),
                       alignment: Alignment.center,
-                      child: Text(categories[index]),
+                      child: SvgPicture.asset(categories[index]),
                     );
                   },
                 ),
@@ -96,7 +97,7 @@ class HomeScreen extends StatelessWidget {
                   color: Colors.grey.shade300,
                 ),
                 alignment: Alignment.center,
-                child: const Text("[ Map Placeholder ]"),
+                child: SvgPicture.asset('assets/map.svg'),
               ),
             ],
           ),

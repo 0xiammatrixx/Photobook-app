@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const String baseUrl = 'http://10.0.2.2:3000/api/auth';
+  static const String baseUrl = 'http://10.0.2.2:5000/api/auth';
 
    final GoogleSignIn _googleSignIn = GoogleSignIn(
      serverClientId: '586439540009-ele8av8d6u8sm24unkr5edu74vfhiip9.apps.googleusercontent.com',
@@ -64,7 +64,7 @@ class AuthService {
       if (idToken == null) return false;
 
       final res = await http.post(
-        Uri.parse('$baseUrl/google'),
+        Uri.parse('$baseUrl/google/callback'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'access_token': idToken}),
       );

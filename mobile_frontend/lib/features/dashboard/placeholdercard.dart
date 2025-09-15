@@ -25,7 +25,7 @@ class PlaceholderCard extends StatelessWidget {
             child: const Text("SVG"),
           ),
           const SizedBox(height: 8),
-          Text(title, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
           Text("⭐" * rating),
           const SizedBox(height: 4),
           Text("View Profile", style: TextStyle(color: Colors.deepOrange.shade400)),

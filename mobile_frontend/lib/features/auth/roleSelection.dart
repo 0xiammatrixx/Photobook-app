@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:mobile_frontend/features/dashboard/HomeScreen/home.dart';
+import 'package:mobile_frontend/features/dashboard/bottom_nav_bar.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -37,7 +37,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
       }
 
       final response = await http.patch(
-        Uri.parse("http://10.0.2.2:3000/api/auth/role"),
+        Uri.parse("http://10.0.2.2:5000/api/auth/role"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -50,7 +50,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => HomeScreen()),
+            MaterialPageRoute(builder: (_) => BottomTabs()),
           );
         }
       } else {

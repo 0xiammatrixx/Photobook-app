@@ -4,7 +4,7 @@ import 'package:mobile_frontend/app/authservice.dart';
 import 'package:mobile_frontend/app/buttons.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/passwordresetscreen.dart';
 import 'package:mobile_frontend/features/auth/signup/signUpScreen.dart';
-import 'package:mobile_frontend/features/dashboard/HomeScreen/home.dart';
+import 'package:mobile_frontend/features/dashboard/bottom_nav_bar.dart';
 
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key});
@@ -39,7 +39,7 @@ class _LoginFormState extends State<LoginForm> {
     if (success && mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => HomeScreen()),
+        MaterialPageRoute(builder: (_) => BottomTabs()),
       );
     } else {
       ScaffoldMessenger.of(
@@ -55,7 +55,7 @@ class _LoginFormState extends State<LoginForm> {
       if (success && mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => HomeScreen()),
+          MaterialPageRoute(builder: (_) => BottomTabs()),
         );
       } else {
         ScaffoldMessenger.of(

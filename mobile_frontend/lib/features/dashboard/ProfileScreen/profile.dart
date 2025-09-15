@@ -24,7 +24,7 @@ class ProfileScreen extends StatelessWidget {
             Text("Logged in/signed in successfully"),
             SizedBox(height: 30),
             SizedBox(
-              width: double.infinity,
+              width: 150,
               child: ElevatedButton(
                 onPressed: () => _logout(context),
                 style: ElevatedButton.styleFrom(
@@ -34,7 +34,7 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 8),
                 ),
-                child: Text('Logout'),
+                child: Text('Logout', style: TextStyle(color: Colors.white)),
               ),
             ),
           ],
