@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:mobile_frontend/app/authservice.dart';
 import 'package:mobile_frontend/app/buttons.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/passwordresetscreen.dart';
+import 'package:mobile_frontend/features/auth/signup/signUpScreen.dart';
+import 'package:mobile_frontend/features/dashboard/HomeScreen/home.dart';
 
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key});
@@ -17,20 +20,51 @@ class _LoginFormState extends State<LoginForm> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _showPassword = false;
+  bool isLoading = false;
 
-  void _handleLogin() {
-    if (_formKey.currentState!.validate()) {
-      final email = _emailController.text.trim();
-      final password = _passwordController.text.trim();
+  final AuthService _authService = AuthService();
 
-      // Backend logic
-      print('Logging in with: $email, $password');
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => isLoading = true);
+
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    final success = await _authService.login(email, password);
+
+    setState(() => isLoading = false);
+
+    if (success && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => HomeScreen()),
+      );
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid credentials')));
     }
   }
 
-  void _logInWithGoogle() {
-    // Google SignIn
-    print('Google Login');
+  Future<void> _logInWithGoogle() async {
+    setState(() => isLoading = true);
+    try {
+      final success = await _authService.googleLogin();
+      if (success && mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => HomeScreen()),
+        );
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Google login failed')));
+      }
+    } finally {
+      setState(() => isLoading = false);
+    }
   }
 
   void _logInWithFacebook() {
@@ -135,7 +169,28 @@ class _LoginFormState extends State<LoginForm> {
               ),
             ),
           ),
-
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Dont have an account?'),
+              TextButton(
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => SignUpPage()),
+                  );
+                },
+                child: Text(
+                  'Sign Up',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF181818),
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
 
           // OR divider

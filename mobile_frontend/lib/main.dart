@@ -5,7 +5,8 @@ import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/newpasswordpage.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/passwordmail.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/resetsuccessful.dart';
-import 'package:mobile_frontend/features/auth/signup/SignUpScreen.dart';
+import 'package:mobile_frontend/features/auth/roleSelection.dart';
+import 'package:mobile_frontend/features/auth/signup/signUpScreen.dart';
 import 'package:mobile_frontend/features/auth/verificationscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -29,7 +30,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         textTheme: GoogleFonts.quicksandTextTheme(Theme.of(context).textTheme)
       ),
-      home: CreatePasswordPage(), //seenOnboarding ? SignUpPage() : OnboardingPage(),
+      home: OnboardingPage(),//seenOnboarding ? LoginPage() : OnboardingPage(),
     );
   }
 }

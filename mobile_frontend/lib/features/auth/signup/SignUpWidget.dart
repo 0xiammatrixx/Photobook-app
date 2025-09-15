@@ -1,7 +1,10 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:mobile_frontend/app/authservice.dart';
 import 'package:mobile_frontend/app/buttons.dart';
+import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
+import 'package:mobile_frontend/features/auth/roleSelection.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SignUpForm extends StatefulWidget {
@@ -18,20 +21,52 @@ class _SignUpFormState extends State<SignUpForm> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  void _handleSignUp() {
-    if (_formKey.currentState!.validate()) {
-      final name = _nameController.text.trim();
-      final email = _emailController.text.trim();
-      final password = _passwordController.text.trim();
+  bool isLoading = false;
 
-      // Backend logic
-      print('Signing up with: $name, $email, $password');
+  final AuthService _authService = AuthService();
+
+  Future<void> _handleSignUp() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => isLoading = true);
+
+    final success = await _authService.signup(
+      _nameController.text.trim(),
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
+
+    setState(() => isLoading = false);
+
+    if (success && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => RoleSelectionPage()),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Signup failed. Please try again.')),
+      );
     }
   }
 
-  void _signInWithGoogle() {
-    // Google SignIn
-    print('Google Sign-In');
+    Future<void> _signInWithGoogle() async {
+    setState(() => isLoading = true);
+    try {
+      final success = await _authService.googleLogin();
+      if (success && mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => RoleSelectionPage()),
+        );
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Google login failed')));
+      }
+    } finally {
+      setState(() => isLoading = false);
+    }
   }
 
   void _signInWithFacebook() {
@@ -131,8 +166,8 @@ class _SignUpFormState extends State<SignUpForm> {
                   recognizer: TapGestureRecognizer()
                     ..onTap = () async {
                       final url = Uri.parse("https://example.com/terms");
-                      if (await canLaunchUrl(url, )) {
-                        launchUrl(url, mode: LaunchMode.externalApplication,);
+                      if (await canLaunchUrl(url)) {
+                        launchUrl(url, mode: LaunchMode.externalApplication);
                       }
                       print("Terms of Service clicked");
                     },
@@ -163,6 +198,27 @@ class _SignUpFormState extends State<SignUpForm> {
               ],
             ),
           ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+            Text('Already have an account?'),
+          TextButton(
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => LoginPage()),
+              );
+            },
+            child: Text(
+              'Login',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF181818),
+              ),
+            ),
+          ),
+          ],),
 
           const SizedBox(height: 24),
 
