@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_frontend/features/dashboard/placeholdercard.dart';
+import 'package:mobile_frontend/features/client_dashboard/placeholdercard.dart';
 
 class HubScreen extends StatelessWidget {
   const HubScreen({super.key});

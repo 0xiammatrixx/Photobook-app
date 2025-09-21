@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mobile_frontend/app/authservice.dart';
 import 'package:mobile_frontend/app/buttons.dart';
+import 'package:mobile_frontend/app/user_provider.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/auth/roleSelection.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SignUpForm extends StatefulWidget {
@@ -30,7 +32,7 @@ class _SignUpFormState extends State<SignUpForm> {
 
     setState(() => isLoading = true);
 
-    final success = await _authService.signup(
+    final user = await _authService.signup(
       _nameController.text.trim(),
       _emailController.text.trim(),
       _passwordController.text.trim(),
@@ -38,23 +40,30 @@ class _SignUpFormState extends State<SignUpForm> {
 
     setState(() => isLoading = false);
 
-    if (success && mounted) {
+    if (!mounted) return; // ✅ safety guard
+
+    if (user != null) {
+      Provider.of<UserProvider>(context, listen: false).setUser(user);
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => RoleSelectionPage()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Signup failed. Please try again.')),
+        const SnackBar(content: Text('Signup failed. Please try again.')),
       );
     }
   }
 
-    Future<void> _signInWithGoogle() async {
+  Future<void> _signInWithGoogle() async {
     setState(() => isLoading = true);
     try {
-      final success = await _authService.googleLogin();
-      if (success && mounted) {
+      final user = await _authService.googleLogin();
+
+      if (!mounted) return;
+
+      if (user != null) {
+        Provider.of<UserProvider>(context, listen: false).setUser(user);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => RoleSelectionPage()),
@@ -65,7 +74,7 @@ class _SignUpFormState extends State<SignUpForm> {
         ).showSnackBar(const SnackBar(content: Text('Google login failed')));
       }
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -202,23 +211,24 @@ class _SignUpFormState extends State<SignUpForm> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-            Text('Already have an account?'),
-          TextButton(
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => LoginPage()),
-              );
-            },
-            child: Text(
-              'Login',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF181818),
+              Text('Already have an account?'),
+              TextButton(
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => LoginPage()),
+                  );
+                },
+                child: Text(
+                  'Login',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF181818),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-          ],),
 
           const SizedBox(height: 24),
 

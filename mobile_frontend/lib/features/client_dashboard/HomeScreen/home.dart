@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:mobile_frontend/features/dashboard/placeholdercard.dart';
+import 'package:mobile_frontend/app/user_provider.dart';
+import 'package:mobile_frontend/features/client_dashboard/placeholdercard.dart';
+import 'package:provider/provider.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -15,6 +17,8 @@ class HomeScreen extends StatelessWidget {
 
     final List<String> categories = ["assets/weddings.svg", "assets/birthdays.svg", "assets/products.svg"];
 
+    final user = Provider.of<UserProvider>(context).user;
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -22,8 +26,8 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Hello Tolu,", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const Text("Abuja, Nigeria", style: TextStyle(color: Colors.grey)),
+              Text( user != null ? "Hello ${user['name']}," : "Hello Guest,", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text("Abuja, Nigeria", style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 12),
 
               // Search Bar

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:mobile_frontend/features/dashboard/bottom_nav_bar.dart';
+import 'package:mobile_frontend/features/auth/businessName.dart';
+import 'package:mobile_frontend/features/client_dashboard/bottom_nav_bar.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -48,10 +49,18 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
       if (response.statusCode == 200) {
         if (!mounted) return;
         if (mounted) {
+          if (roleForBackend == "photographer") {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => BusinessNamePage()),
+          );
+        } else if(roleForBackend == "client"){
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => BottomTabs()),
           );
+        }
+        
         }
       } else {
         final err = jsonDecode(response.body);

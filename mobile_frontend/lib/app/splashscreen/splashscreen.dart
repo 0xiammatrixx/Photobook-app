@@ -1,3 +1,4 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:mobile_frontend/app/buttons.dart';
@@ -210,6 +211,15 @@ class OnboardingSlide extends StatelessWidget {
 class ReadyPage extends StatelessWidget {
   const ReadyPage({super.key});
 
+  Future<void> _click(BuildContext context) async {
+    final player = AudioPlayer();
+    player.play(AssetSource('sounds/shuttersound.mp3'));
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const SignUpPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -245,10 +255,7 @@ class ReadyPage extends StatelessWidget {
                       text: 'Click',
                       width: screenWidth * 0.8,
                       onPressed: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => SignUpPage()),
-                        );
+                        _click(context);
                       },
                     ),
                   ],

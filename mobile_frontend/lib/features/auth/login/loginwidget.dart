@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mobile_frontend/app/authservice.dart';
 import 'package:mobile_frontend/app/buttons.dart';
+import 'package:mobile_frontend/app/user_provider.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/passwordresetscreen.dart';
 import 'package:mobile_frontend/features/auth/signup/signUpScreen.dart';
-import 'package:mobile_frontend/features/dashboard/bottom_nav_bar.dart';
+import 'package:mobile_frontend/features/client_dashboard/bottom_nav_bar.dart';
+import 'package:provider/provider.dart';
 
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key});
@@ -32,11 +34,17 @@ class _LoginFormState extends State<LoginForm> {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    final success = await _authService.login(email, password);
+    final user = await _authService.login(
+      email,
+      password,
+    ); // now returns Map or null
 
     setState(() => isLoading = false);
 
-    if (success && mounted) {
+    if (!mounted) return;
+
+    if (user != null) {
+      Provider.of<UserProvider>(context, listen: false).setUser(user);
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => BottomTabs()),
@@ -51,8 +59,12 @@ class _LoginFormState extends State<LoginForm> {
   Future<void> _logInWithGoogle() async {
     setState(() => isLoading = true);
     try {
-      final success = await _authService.googleLogin();
-      if (success && mounted) {
+      final user = await _authService.googleLogin(); // returns Map or null
+
+      if (!mounted) return;
+
+      if (user != null) {
+        Provider.of<UserProvider>(context, listen: false).setUser(user);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => BottomTabs()),
@@ -63,7 +75,7 @@ class _LoginFormState extends State<LoginForm> {
         ).showSnackBar(const SnackBar(content: Text('Google login failed')));
       }
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 

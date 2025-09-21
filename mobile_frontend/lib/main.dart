@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_frontend/app/splashscreen/splashscreen.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_frontend/app/user_provider.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/newpasswordpage.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/passwordmail.dart';
@@ -8,6 +9,8 @@ import 'package:mobile_frontend/features/auth/passwordreset/resetsuccessful.dart
 import 'package:mobile_frontend/features/auth/roleSelection.dart';
 import 'package:mobile_frontend/features/auth/signup/signUpScreen.dart';
 import 'package:mobile_frontend/features/auth/verificationscreen.dart';
+import 'package:mobile_frontend/features/creative_dashboard/bottom_nav_bar.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
@@ -15,7 +18,13 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final seenOnboarding = prefs.getBool('seenOnboarding') ?? false;
 
-  runApp(MyApp(seenOnboarding: seenOnboarding));
+  runApp(
+  ChangeNotifierProvider(
+      create: (_) => UserProvider()..loadUser(),
+
+  child: MyApp(seenOnboarding: seenOnboarding),
+  ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -30,7 +39,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         textTheme: GoogleFonts.quicksandTextTheme(Theme.of(context).textTheme)
       ),
-      home: OnboardingPage(),//seenOnboarding ? LoginPage() : OnboardingPage(),
+      home: CreativeBottomTabs(),//seenOnboarding ? LoginPage() : OnboardingPage(),
     );
   }
 }
