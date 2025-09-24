@@ -6,6 +6,7 @@ import 'package:mobile_frontend/app/user_provider.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/passwordresetscreen.dart';
 import 'package:mobile_frontend/features/auth/signup/signUpScreen.dart';
 import 'package:mobile_frontend/features/client_dashboard/bottom_nav_bar.dart';
+import 'package:mobile_frontend/features/creative_dashboard/bottom_nav_bar.dart';
 import 'package:provider/provider.dart';
 
 class LoginForm extends StatefulWidget {
@@ -45,9 +46,19 @@ class _LoginFormState extends State<LoginForm> {
 
     if (user != null) {
       Provider.of<UserProvider>(context, listen: false).setUser(user);
+
+      final role = user['role'] ?? 'client'; // default to client if null
+      Widget nextPage;
+
+      if (role == 'photographer') {
+        nextPage = CreativeBottomTabs(); // your creative dashboard
+      } else {
+        nextPage = BottomTabs(); // your client dashboard
+      }
+
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => BottomTabs()),
+        MaterialPageRoute(builder: (_) => nextPage),
       );
     } else {
       ScaffoldMessenger.of(

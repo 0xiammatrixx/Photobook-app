@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_frontend/app/authservice.dart';
+import 'package:mobile_frontend/features/auth/roleSelection.dart';
 import 'package:pinput/pinput.dart';
 
 class VerificationPage extends StatelessWidget {
-  const VerificationPage({super.key});
+  final String email;
+  const VerificationPage({super.key, required this.email});
 
   @override
   Widget build(BuildContext context) {
@@ -14,8 +17,9 @@ class VerificationPage extends StatelessWidget {
           child: SizedBox(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                SizedBox( width: 264,
+              children: [
+                const SizedBox(
+                  width: 264,
                   child: Column(
                     children: [
                       Text(
@@ -35,9 +39,9 @@ class VerificationPage extends StatelessWidget {
                   ),
                 ),
 
-                SizedBox(height: 40),
+                const SizedBox(height: 40),
 
-                VerificationForm(),
+                VerificationForm(email: email),
               ],
             ),
           ),
@@ -48,34 +52,79 @@ class VerificationPage extends StatelessWidget {
 }
 
 class VerificationForm extends StatefulWidget {
-  const VerificationForm({super.key});
+  final String email;
+  const VerificationForm({super.key, required this.email});
 
   @override
   State<VerificationForm> createState() => _VerificationFormState();
 }
 
 class _VerificationFormState extends State<VerificationForm> {
-  void _verifyCode(String code) {
-    // Call  backend verification logic
-    print('Verifying code: $code');
-    // e.g. AuthService.verifyEmailCode(code);
+  final AuthService _authService = AuthService();
+  final TextEditingController _pinController = TextEditingController();
+
+  Future<void> _verifyCode(String code) async {
+    final verified = await _authService.verifyEmail(widget.email, code);
+
+    if (!mounted) return;
+
+    if (verified) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => RoleSelectionPage()),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid code. Please try again.')),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _pinController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Pinput(
-      length: 6,
-      showCursor: true,
-      onCompleted: (pin) => _verifyCode(pin),
-      defaultPinTheme: PinTheme(
-        width: 50,
-        height: 60,
-        textStyle: const TextStyle(fontSize: 24, color: Colors.black),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade400),
-          borderRadius: BorderRadius.circular(8),
+    return Column(
+      children: [
+        Pinput(
+          controller: _pinController,
+          length: 6,
+          showCursor: true,
+          onCompleted: (pin) => _verifyCode(pin),
+          defaultPinTheme: PinTheme(
+            width: 50,
+            height: 60,
+            textStyle: const TextStyle(fontSize: 24, color: Colors.black),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
         ),
-      ),
+        TextButton(
+          onPressed: () async {
+            final success = await _authService.resendVerification(widget.email);
+            if (success) {
+              _pinController.clear();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Verification code resent!')),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Failed to resend code')),
+              );
+            }
+          },
+          child: const Text(
+            "Resend Code",
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
     );
   }
 }

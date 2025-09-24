@@ -37,29 +37,90 @@ class AuthService {
   }
 
   /// Signup with name + email + password
-  Future<Map<String, dynamic>?> signup(
-    String name,
-    String email,
-    String password,
-  ) async {
+  // Future<Map<String, dynamic>?> signup(
+  //   String name,
+  //   String email,
+  //   String password,
+  // ) async {
+  //   final res = await http.post(
+  //     Uri.parse('$baseUrl/signup'),
+  //     headers: {'Content-Type': 'application/json'},
+  //     body: jsonEncode({
+  //       'name': name,
+  //       'email': email,
+  //       'password': password,
+  //       'role': 'client',
+  //     }),
+  //   );
+
+  //   if (res.statusCode == 200) {
+  //     final data = jsonDecode(res.body);
+  //     await _saveAuthData(data['token'], data['user']);
+  //     return data['user'];
+  //   } else {
+  //     print('Signup failed: ${res.body}');
+  //     return null;
+  //   }
+  // }
+
+  Future<bool> signup(String name, String email, String password) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/signup'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"name": name, "email": email, "password": password}),
+      );
+
+      if (res.statusCode == 200) {
+        return true;
+      } else {
+        print("❌ Signup failed (${res.statusCode}): ${res.body}");
+        return false;
+      }
+    } catch (e) {
+      print("❌ Signup request error: $e");
+      return false;
+    }
+  }
+
+  Future<bool> verifyEmail(String email, String code) async {
     final res = await http.post(
-      Uri.parse('$baseUrl/signup'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'name': name,
-        'email': email,
-        'password': password,
-        'role': 'client',
-      }),
+      Uri.parse('$baseUrl/verify-email'),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email, "code": code}),
     );
 
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body);
-      await _saveAuthData(data['token'], data['user']);
-      return data['user'];
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('token', data['token']);
+      await prefs.setString('user', jsonEncode(data['user']));
+
+      return true;
     } else {
-      print('Signup failed: ${res.body}');
-      return null;
+      print("Verify email failed: ${res.body}");
+      return false;
+    }
+  }
+
+  Future<bool> resendVerification(String email) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/resend-verification'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"email": email}),
+      );
+
+      if (res.statusCode == 200) {
+        return true;
+      } else {
+        print("❌ Resend failed: ${res.body}");
+        return false;
+      }
+    } catch (e) {
+      print("❌ Resend error: $e");
+      return false;
     }
   }
 
@@ -99,7 +160,7 @@ class AuthService {
     if (token == null) return null;
 
     final res = await http.put(
-      Uri.parse('$baseUrl/update-business'), // <-- backend endpoint
+      Uri.parse('$baseUrl/profile'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',

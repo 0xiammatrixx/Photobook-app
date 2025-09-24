@@ -6,6 +6,7 @@ import 'package:mobile_frontend/app/buttons.dart';
 import 'package:mobile_frontend/app/user_provider.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/auth/roleSelection.dart';
+import 'package:mobile_frontend/features/auth/verificationscreen.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -28,32 +29,34 @@ class _SignUpFormState extends State<SignUpForm> {
   final AuthService _authService = AuthService();
 
   Future<void> _handleSignUp() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
 
-    setState(() => isLoading = true);
+  setState(() => isLoading = true);
 
-    final user = await _authService.signup(
-      _nameController.text.trim(),
-      _emailController.text.trim(),
-      _passwordController.text.trim(),
+  final success = await _authService.signup(
+    _nameController.text.trim(),
+    _emailController.text.trim(),
+    _passwordController.text.trim(),
+  );
+
+  setState(() => isLoading = false);
+
+  if (!mounted) return;
+
+  if (success) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VerificationPage(email: _emailController.text.trim()),
+      ),
     );
-
-    setState(() => isLoading = false);
-
-    if (!mounted) return; // ✅ safety guard
-
-    if (user != null) {
-      Provider.of<UserProvider>(context, listen: false).setUser(user);
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => RoleSelectionPage()),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Signup failed. Please try again.')),
-      );
-    }
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Signup failed. Please try again.')),
+    );
   }
+}
+
 
   Future<void> _signInWithGoogle() async {
     setState(() => isLoading = true);

@@ -67,10 +67,8 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
   Widget build(BuildContext context) {
     final user = Provider.of<UserProvider>(context).user;
 
-    String getFirstName(String? fullName) {
-      if (fullName == null || fullName.trim().isEmpty) return "Guest";
-      return fullName.trim().split(' ')[0];
-    }
+    final firstName = user?['name']?.split(' ').first ?? "Guest";
+    final businessName = user?['businessName'];
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -82,8 +80,13 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
             children: [
               // Greeting
               Text(
-                "Hello ${getFirstName(user?['name'])}",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                businessName != null && businessName.isNotEmpty
+                    ? "Hello $firstName ($businessName),"
+                    : "Hello $firstName,",
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 16),
 

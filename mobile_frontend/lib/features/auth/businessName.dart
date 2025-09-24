@@ -54,7 +54,7 @@ class _BusinessNamePageState extends State<BusinessNamePage> {
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) =>
-                    value == null || value.isEmpty ? "Enter a business name" : null,
+                    value == null || value.isEmpty ? "Enter your business name" : null,
               ),
               const SizedBox(height: 20),
               ElevatedButton(
