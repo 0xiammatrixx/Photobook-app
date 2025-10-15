@@ -9,7 +9,7 @@ class CountUpText extends StatefulWidget {
   const CountUpText({
     Key? key,
     required this.endValue,
-    this.duration = const Duration(seconds: 2),
+    this.duration = const Duration(seconds: 1),
     required this.style,
   }) : super(key: key);
 
@@ -109,7 +109,7 @@ class CountUpFormattedText extends StatefulWidget {
   const CountUpFormattedText({
     Key? key,
     required this.endValue,
-    this.duration = const Duration(seconds: 2),
+    this.duration = const Duration(seconds: 1),
     required this.style,
   }) : super(key: key);
 

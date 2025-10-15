@@ -19,7 +19,7 @@ class _BottomTabsState extends State<BottomTabs> {
     HomeScreen(),
     HubScreen(),
     ChatScreen(),
-    ProfileScreen(),
+    ClientProfileScreen(),
   ];
 
   void _onItemTapped(int index) {

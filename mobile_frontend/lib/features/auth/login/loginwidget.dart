@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:mobile_frontend/app/authservice.dart';
+import 'package:mobile_frontend/services/authservice.dart';
 import 'package:mobile_frontend/app/buttons.dart';
 import 'package:mobile_frontend/app/user_provider.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/passwordresetscreen.dart';
@@ -45,7 +45,7 @@ class _LoginFormState extends State<LoginForm> {
     if (!mounted) return;
 
     if (user != null) {
-      Provider.of<UserProvider>(context, listen: false).setUser(user);
+      Provider.of<UserProvider>(context, listen: false).setUser(user, user['token']);
 
       final role = user['role'] ?? 'client'; // default to client if null
       Widget nextPage;
@@ -75,7 +75,7 @@ class _LoginFormState extends State<LoginForm> {
       if (!mounted) return;
 
       if (user != null) {
-        Provider.of<UserProvider>(context, listen: false).setUser(user);
+        Provider.of<UserProvider>(context, listen: false).setUser(user, user['token']);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => BottomTabs()),
@@ -104,8 +104,11 @@ class _LoginFormState extends State<LoginForm> {
           // Email
           TextFormField(
             controller: _emailController,
+            cursorColor: Colors.black,
+            cursorRadius: Radius.zero,
             decoration: const InputDecoration(
               labelText: 'Email address',
+              labelStyle: TextStyle(color: Colors.black),
               border: OutlineInputBorder(
                 borderSide: BorderSide(color: Color(0xFFE0E0E0)),
                 borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -126,8 +129,11 @@ class _LoginFormState extends State<LoginForm> {
           // Password
           TextFormField(
             controller: _passwordController,
+            cursorColor: Colors.black,
+            cursorRadius: Radius.zero,
             decoration: const InputDecoration(
               labelText: 'Password',
+              labelStyle: TextStyle(color: Colors.black),
               border: OutlineInputBorder(
                 borderSide: BorderSide(color: Color(0xFFE0E0E0)),
                 borderRadius: BorderRadius.all(Radius.circular(8)),

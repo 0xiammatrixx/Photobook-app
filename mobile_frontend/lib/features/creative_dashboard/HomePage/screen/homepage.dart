@@ -314,7 +314,6 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: Container(
         padding: const EdgeInsets.all(12.0),
-        height: 120,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start, // align to top
           children: [
@@ -323,9 +322,9 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
               radius: 24,
               backgroundImage: const AssetImage("assets/tolu_avatar.png"),
             ),
-
+    
             const SizedBox(width: 12),
-
+    
             // Column 2: Name, Type+Date, Location
             Expanded(
               child: Column(
@@ -356,7 +355,7 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
                 ],
               ),
             ),
-
+    
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,

@@ -1,22 +1,134 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
+import 'package:mobile_frontend/app/profile_provider.dart';
+import 'package:mobile_frontend/services/authservice.dart';
+import 'package:mobile_frontend/app/ratecard_provider.dart';
+import 'package:mobile_frontend/app/user_provider.dart';
+import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
+import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profileedit.dart';
 import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/reviewmodel.dart';
+import 'package:mobile_frontend/features/creative_dashboard/rateCard.dart';
+import 'package:mobile_frontend/services/profileservice.dart';
+import 'package:provider/provider.dart';
 
-class CreativeProfilePage extends StatelessWidget {
+class CreativeProfilePage extends StatefulWidget {
   const CreativeProfilePage({super.key});
 
   @override
+  State<CreativeProfilePage> createState() => _CreativeProfilePageState();
+}
+
+class _CreativeProfilePageState extends State<CreativeProfilePage> {
+  final _profileService = ProfilePortfolioService();
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile({bool initial = false}) async {
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final profileProvider = Provider.of<ProfileProvider>(
+        context,
+        listen: false,
+      );
+
+      final userId = userProvider.user?['_id'];
+      final token = userProvider.token;
+      if (userId == null || token == null) return;
+
+      final data = await _profileService.getProfile(userId, token: token);
+       print("🔗 Avatar URL from backend: ${data['basic']?['avatarUrl']}");
+      profileProvider.setProfile(data);
+
+      print(
+        "🧩 Profile loaded for ${data['role']}, isOwner: ${data['isOwner']}",
+      );
+    } catch (e) {
+      print("❌ Error loading profile: $e");
+    }
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    await AuthService().logout();
+
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    final profile = Provider.of<ProfileProvider>(context).profile;
+    final userProvider = Provider.of<UserProvider>(context);
+
+    if (profile == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final basic = profile['basic'] ?? {};
+    final creative = profile['creativeDetails'] ?? {};
+    final isOwner = profile['isOwner'] ?? false;
+    final role = profile['role'] ?? 'client';
+    final businessName = isOwner
+        ? (userProvider.user?['basic']?['businessName'] ??
+              basic['businessName'] ??
+              'No Name')
+        : (basic['businessName'] ?? 'No Name');
+
+    return Scaffold(
       backgroundColor: Colors.white,
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ProfileHeader(),
-            AboutMeSection(),
-            PortfolioReviewSection(),
-          ],
+      body: RefreshIndicator(
+        onRefresh: () => _loadProfile(initial: false),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Consumer<ProfileProvider>(
+                  builder: (context, profileProvider, _) {
+                    final basic = profileProvider.profile?['basic'] ?? {};
+                    return ProfileHeader(
+                      businessName: businessName,
+                      avatarUrl: basic['avatarUrl'],
+                      role: role,
+                      isOwner: isOwner,
+                      onEditComplete: () {
+                        setState(() {});
+                      },
+                    );
+                  },
+                ),
+                AboutMeSection(about: creative['aboutMe'] ?? ''),
+                PortfolioReviewSection(),
+                const SizedBox(height: 20),
+                //if (isOwner)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => _logout(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFAA0A0A),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      child: const Text(
+                        'Logout',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -25,40 +137,61 @@ class CreativeProfilePage extends StatelessWidget {
 
 /// ------------------ PROFILE HEADER ------------------ ///
 class ProfileHeader extends StatelessWidget {
-  const ProfileHeader({super.key});
+  final String businessName;
+  final String? avatarUrl;
+  final String role;
+  final bool isOwner;
+  final VoidCallback? onEditComplete;
+
+  const ProfileHeader({
+    super.key,
+    required this.businessName,
+    required this.avatarUrl,
+    required this.role,
+    required this.isOwner,
+    this.onEditComplete,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final imageWidget = avatarUrl != null
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: Image.network(
+              avatarUrl!,
+              width: 117,
+              height: 103,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Image.asset(
+                "assets/profileplaceholder.png",
+                width: 117,
+                height: 103,
+              ),
+            ),
+          )
+        : Image.asset("assets/profileplaceholder.png", width: 117, height: 103);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          const Text(
             "My Profile",
-            textAlign: TextAlign.start,
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 5),
           Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(15),
-              color: Color(0xFFF5F9F6),
+              color: const Color(0xFFF5F9F6),
             ),
             padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(15),
-                  child: SvgPicture.asset(
-                    "assets/timmonprofile.svg", // replace with network if needed
-                    width: 117,
-                    height: 103,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                const SizedBox(width: 40),
+                imageWidget,
+                const SizedBox(height: 20),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -66,102 +199,113 @@ class ProfileHeader extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            "Timmon Photography",
-                            style: TextStyle(
+                          Text(
+                            businessName,
+                            style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: const [
-                              Icon(
-                                Icons.star,
-                                color: Color(0xFFFF9F05),
-                                size: 12,
-                              ),
-                              Icon(
-                                Icons.star,
-                                color: Color(0xFFFF9F05),
-                                size: 12,
-                              ),
-                              Icon(
-                                Icons.star,
-                                color: Color(0xFFFF9F05),
-                                size: 12,
-                              ),
-                              Icon(
-                                Icons.star,
-                                color: Color(0xFFFF9F05),
-                                size: 12,
-                              ),
-                              Icon(
-                                Icons.star_border,
-                                color: Color(0xFFFF9F05),
-                                size: 12,
-                              ),
-                            ],
-                          ),
                           const SizedBox(height: 8),
-                          const Text(
-                            "Corporate Photographer",
-                            style: TextStyle(color: Colors.grey, fontSize: 10),
+                          Text(
+                            role == 'photographer' ? "Photographer" : "Client",
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 10,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    Column(
-                      children: [
-                        SizedBox(
-                          height: 31,
-                          width: 83,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
+
+                    // Hide buttons if user is viewing their own profile
+                    if (!isOwner)
+                      Column(
+                        children: [
+                          SizedBox(
+                            height: 31,
+                            width: 83,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: EdgeInsets.zero,
+                                backgroundColor: const Color(0xFFFF7A33),
                               ),
-                              backgroundColor: Color(0xFFFF7A33),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                            ),
-                            onPressed: () {},
-                            child: const Text(
-                              "Book Now",
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 5),
-                        SizedBox(
-                          height: 31,
-                          width: 83,
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              backgroundColor: Colors.white,
-                              side: BorderSide(color: Colors.black),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            onPressed: () {},
-                            child: const Text(
-                              "Message",
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.black,
+                              onPressed: () {},
+                              child: const Text(
+                                "Book Now",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 5),
+                          SizedBox(
+                            height: 31,
+                            width: 83,
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.black),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: EdgeInsets.zero,
+                              ),
+                              onPressed: () {},
+                              child: const Text(
+                                "Message",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Column(
+                        children: [
+                          SizedBox(
+                            height: 31,
+                            width: 83,
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.black),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: EdgeInsets.zero,
+                              ),
+                              onPressed: () async {
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const EditProfilePage(),
+                                  ),
+                                );
+                                // If edit was successful, refresh parent
+                                if (result == true && onEditComplete != null) {
+                                  onEditComplete!();
+                                }
+                              },
+                              child: const Text(
+                                "Edit Profile",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ],
@@ -175,7 +319,8 @@ class ProfileHeader extends StatelessWidget {
 
 /// ------------------ ABOUT ME ------------------ ///
 class AboutMeSection extends StatelessWidget {
-  const AboutMeSection({super.key});
+  final String about;
+  const AboutMeSection({super.key, required this.about});
 
   @override
   Widget build(BuildContext context) {
@@ -186,19 +331,19 @@ class AboutMeSection extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.all(16),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          const Text(
             "About Me",
             textAlign: TextAlign.start,
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
-            "Passionate about capturing stories through the lens, I specialize in portrait, lifestyle, and CORPORATE event photography. My work blends natural light with bold composition to create timeless, emotive images. I believe every moment holds beauty, and my goal is to freeze it with authenticity and style. With years of hands-on experience and a love for visual storytelling,",
+            about.isNotEmpty ? about : "No description added yet.",
             textAlign: TextAlign.start,
-            style: TextStyle(color: Colors.black, fontSize: 12),
+            style: const TextStyle(color: Colors.black, fontSize: 12),
           ),
         ],
       ),
@@ -225,6 +370,9 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
     "assets/portfolio3.svg",
     "assets/portfolio2.svg",
     "assets/portfolio1.svg",
+    "assets/portfolio9.png",
+    "assets/portfolio8.png",
+    "assets/portfolio7.png",
   ];
 
   @override
@@ -234,7 +382,7 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
         borderRadius: BorderRadius.circular(15),
         color: Color(0xFFF5F9F6),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.only(right: 16, left: 16, bottom: 16),
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
@@ -311,10 +459,7 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
               Positioned.fill(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(15),
-                  child: SvgPicture.asset(
-                    portfolioImages[index],
-                    fit: BoxFit.cover,
-                  ),
+                  child: Image.asset(portfolioImages[index], fit: BoxFit.cover),
                 ),
               ),
               const Positioned(
@@ -335,15 +480,12 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
       onTap: () => setState(() => expandedIndex = null), // collapse
       child: Stack(
         children: [
-          AspectRatio(
-            aspectRatio: 16 / 9, // keeps it nice, you can adjust
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(15),
-              child: SvgPicture.asset(
-                portfolioImages[index],
-                fit: BoxFit.cover,
-                width: double.infinity,
-              ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: Image.asset(
+              portfolioImages[index],
+              fit: BoxFit.contain,
+              width: double.infinity,
             ),
           ),
           const Positioned(
@@ -498,6 +640,7 @@ class _FullReviewsPageState extends State<FullReviewsPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
+        backgroundColor: Colors.white,
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
@@ -505,15 +648,18 @@ class _FullReviewsPageState extends State<FullReviewsPage> {
             onPressed: () => Navigator.pop(context),
           ),
         ],
-        title: Text("My Reviews (${widget.reviews.length})", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),),
+        title: Text(
+          "My Reviews (${widget.reviews.length})",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
       ),
       body: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(15),
           color: Color(0xFFF5F9F6),
         ),
-        padding: const EdgeInsets.all(16),
-        margin: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: ListView.separated(
           controller: _controller,
           itemCount: loadedReviews.length + 1, // +1 for loader at end

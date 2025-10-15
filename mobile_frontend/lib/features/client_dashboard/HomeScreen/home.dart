@@ -19,6 +19,8 @@ class HomeScreen extends StatelessWidget {
 
     final user = Provider.of<UserProvider>(context).user;
 
+    String firstname = user?['name']?.split(' ').first ?? "Guest";
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -26,7 +28,7 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text( user != null ? "Hello ${user['name']}," : "Hello Guest,", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text( user != null ? "Hello ${firstname}," : "Hello Guest,", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               Text("Abuja, Nigeria", style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 12),
 

@@ -1,0 +1,283 @@
+📦 Core Modules (without Auth)
+1. Profile & Portfolio (Creatives)
+
+Backend responsibilities:
+
+Endpoints for creating/updating creative profile.
+
+Portfolio CRUD (upload images/videos, add description/tags).
+
+Signed URLs for media upload to storage (S3/GCS).
+
+Basic moderation fields (approved, flagged).
+
+Frontend responsibilities:
+
+Profile form (creative-specific fields: bio, rate card, services).
+
+Portfolio upload UI (images/videos, progress bars).
+
+Gallery view in profile page.
+
+Tags & categories selection.
+
+2. Search & Discovery
+
+Backend responsibilities:
+
+Search/filter by tags, category, services.
+
+Pagination & sorting (rating, price, distance).
+
+Geospatial queries (for “nearby creatives”).
+
+Return summary profiles (not full data).
+
+Frontend responsibilities:
+
+Search bar + filter UI.
+
+Discovery list/grid view of creatives.
+
+Map view (with markers for creatives).
+
+Infinite scroll or “load more.”
+
+3. Map & Geolocation
+
+Backend responsibilities:
+
+Store creatives’ service location (POINT: lat/lng).
+
+Endpoint for “nearby creatives within X km.”
+
+Online/presence indicator via WebSocket/Redis.
+
+Frontend responsibilities:
+
+Ask location permission.
+
+Map screen (markers for photographer/videographer).
+
+Marker legend (different icons/colors).
+
+Click marker → open creative profile.
+
+4. Chat & Messaging
+
+Backend responsibilities:
+
+WebSocket server for real-time messaging.
+
+Persist messages in DB (with status: sent/delivered/read).
+
+Message attachments (image/file links).
+
+Presence & typing indicators.
+
+Frontend responsibilities:
+
+Chat UI (WhatsApp-style).
+
+Optimistic sending (pending → confirmed).
+
+Local DB (Hive/SQLite) for offline history.
+
+Read receipts, online indicator.
+
+5. Booking & Scheduling
+
+Backend responsibilities:
+
+Booking lifecycle: created → paid → confirmed → completed → closed/disputed.
+
+Availability (simple: stored JSON slots; advanced: calendar integration).
+
+Cancel/reschedule logic.
+
+Frontend responsibilities:
+
+Booking form (service type, date, time, notes).
+
+Creative availability picker.
+
+Booking confirmation screen.
+
+Booking history list for both clients & creatives.
+
+6. Payments & Escrow
+
+Backend responsibilities:
+
+Integrate Stripe (or PSP) for marketplace payouts.
+
+Create checkout sessions/payment intents.
+
+Escrow funds until job completion.
+
+Refunds, disputes, payout schedules.
+
+Ledger records for auditing.
+
+Frontend responsibilities:
+
+Payment flow (native card entry or hosted checkout).
+
+Payment status indicators (pending, confirmed, refunded).
+
+Payout settings for creatives (link bank/Stripe account).
+
+Booking → payment → confirmation UX.
+
+7. Verification & KYC
+
+Backend responsibilities:
+
+Endpoint for ID/license upload.
+
+(MVP) manual verification dashboard for admins.
+
+(v1) integrate KYC vendor (Onfido/Jumio).
+
+Store verification status & badge flag.
+
+Frontend responsibilities:
+
+Verification upload form (ID/license, selfie).
+
+Status indicator (pending/approved/rejected).
+
+Badge display on creative profile.
+
+8. Notifications
+
+Backend responsibilities:
+
+Push notification service (FCM/APNs).
+
+In-app notification feed (DB table + API).
+
+Email notifications for important events.
+
+Frontend responsibilities:
+
+Register push token with backend.
+
+In-app notification list.
+
+Show push for new message, booking update, verification result.
+
+9. Ratings & Reviews
+
+Backend responsibilities:
+
+Endpoints for leaving review after booking.
+
+Store rating + comment.
+
+Aggregate average rating per creative.
+
+Frontend responsibilities:
+
+Post-booking review screen (stars + text).
+
+Reviews list on creative profile.
+
+Show average rating summary.
+
+10. Admin & Moderation
+
+Backend responsibilities:
+
+Admin dashboard for user/creative management.
+
+Approve/reject verification.
+
+Handle reports (spam, abuse, fraud).
+
+Resolve disputes (hold/release payments).
+
+Frontend responsibilities (separate admin panel):
+
+Admin login.
+
+Table views for users/bookings/messages.
+
+Action buttons (suspend, refund, approve).
+
+// Text(
+              //   "My Portfolio",
+              //   style: Theme.of(context).textTheme.titleMedium,
+              // ),
+              // const SizedBox(height: 12),
+
+              // GridView.builder(
+              //   shrinkWrap: true,
+              //   physics: const NeverScrollableScrollPhysics(),
+              //   itemCount: portfolioImages.length + 1, // +1 for Add button
+              //   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              //     crossAxisCount: 3,
+              //     crossAxisSpacing: 8,
+              //     mainAxisSpacing: 8,
+              //   ),
+              //   itemBuilder: (context, index) {
+              //     if (index == portfolioImages.length) {
+              //       // Add new image button
+              //       return GestureDetector(
+              //         onTap: () {
+              //           // TODO: pick and upload new image
+              //         },
+              //         child: Container(
+              //           decoration: BoxDecoration(
+              //             borderRadius: BorderRadius.circular(12),
+              //             color: Colors.grey.shade200,
+              //           ),
+              //           child: const Center(
+              //             child: Icon(Icons.add, size: 40, color: Colors.grey),
+              //           ),
+              //         ),
+              //       );
+              //     }
+
+              //     final image = portfolioImages[index];
+              //     return Stack(
+              //       children: [
+              //         ClipRRect(
+              //           borderRadius: BorderRadius.circular(12),
+              //           child: Opacity(
+              //             opacity: 0.9,
+              //             child: SvgPicture.asset(
+              //               // or Image.network if backend
+              //               image,
+              //               fit: BoxFit.cover,
+              //               width: double.infinity,
+              //               height: double.infinity,
+              //             ),
+              //           ),
+              //         ),
+              //         Positioned(
+              //           top: 4,
+              //           right: 4,
+              //           child: GestureDetector(
+              //             onTap: () {
+              //               // TODO: remove this image
+              //             },
+              //             child: Container(
+              //               padding: const EdgeInsets.all(4),
+              //               decoration: const BoxDecoration(
+              //                 shape: BoxShape.circle,
+              //                 color: Colors.black54,
+              //               ),
+              //               child: const Icon(
+              //                 Icons.delete,
+              //                 size: 16,
+              //                 color: Colors.white,
+              //               ),
+              //             ),
+              //           ),
+              //         ),
+              //       ],
+              //     );
+              //   },
+              // ),
+

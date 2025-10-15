@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_frontend/app/authservice.dart';
+import 'package:mobile_frontend/services/authservice.dart';
 import 'package:mobile_frontend/features/creative_dashboard/bottom_nav_bar.dart';
 
 class BusinessNamePage extends StatefulWidget {

@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const String baseUrl = 'http://10.0.2.2:5000/api/auth';
+  static const String baseUrl = 'http://10.0.2.2:5000/api/auth'; //'http://172.20.10.5:5000/api/auth';
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     serverClientId:
@@ -28,6 +28,8 @@ class AuthService {
 
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body);
+      final user = data['user'];
+      user['token'] = data['token'];
       await _saveAuthData(data['token'], data['user']);
       return data['user']; // return user map
     } else {
@@ -35,33 +37,6 @@ class AuthService {
       return null;
     }
   }
-
-  /// Signup with name + email + password
-  // Future<Map<String, dynamic>?> signup(
-  //   String name,
-  //   String email,
-  //   String password,
-  // ) async {
-  //   final res = await http.post(
-  //     Uri.parse('$baseUrl/signup'),
-  //     headers: {'Content-Type': 'application/json'},
-  //     body: jsonEncode({
-  //       'name': name,
-  //       'email': email,
-  //       'password': password,
-  //       'role': 'client',
-  //     }),
-  //   );
-
-  //   if (res.statusCode == 200) {
-  //     final data = jsonDecode(res.body);
-  //     await _saveAuthData(data['token'], data['user']);
-  //     return data['user'];
-  //   } else {
-  //     print('Signup failed: ${res.body}');
-  //     return null;
-  //   }
-  // }
 
   Future<bool> signup(String name, String email, String password) async {
     try {
