@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:mobile_frontend/features/creative_dashboard/AddPortfolioPage/addportfoliopage.dart';
+import 'package:mobile_frontend/features/creative_dashboard/BookingsPage/bookingspage.dart';
 import 'package:mobile_frontend/features/creative_dashboard/ChatPage/chatpage.dart';
 import 'package:mobile_frontend/features/creative_dashboard/HomePage/screen/homepage.dart';
-import 'package:mobile_frontend/features/creative_dashboard/HubPage/hubPage.dart';
 import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profilepage.dart';
 
 class CreativeBottomTabs extends StatefulWidget {
@@ -14,14 +15,6 @@ class CreativeBottomTabs extends StatefulWidget {
 
 class _CreativeBottomTabsState extends State<CreativeBottomTabs> {
   int _selectedIndex = 0;
-
-  // final List<Widget> _pages = const [
-  //   CreativeHomePage(key: ValueKey("home")),
-  //   CreativeHubPage(),
-  //   CreativeChatPage(),
-  //   CreativeProfilePage(),
-  // ];
-
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
@@ -36,7 +29,8 @@ class _CreativeBottomTabsState extends State<CreativeBottomTabs> {
         children: [
           // 👇 force rebuild only Home when selected
           CreativeHomePage(key: ValueKey("home-$_selectedIndex")),
-          const CreativeHubPage(),
+          const CreativeBookingsPage(),
+          const AddPortfolioPage(),
           const CreativeChatPage(),
           const CreativeProfilePage(),
         ],
@@ -65,24 +59,32 @@ class _CreativeBottomTabsState extends State<CreativeBottomTabs> {
             label: "Home",
           ),
           BottomNavigationBarItem(
-            icon: SvgPicture.asset('assets/hub_icon.svg',
-            width: 24,
+            icon: SvgPicture.asset(
+              'assets/bookings_icon.svg',
+              width: 24,
               height: 24,
-              color: Colors.black,),
-              activeIcon: SvgPicture.asset(
-              "assets/hub_icon.svg",
+              color: Colors.black,
+            ),
+            activeIcon: SvgPicture.asset(
+              "assets/bookings_icon.svg",
               width: 24,
               height: 24,
               color: Color(0xFFFF7A33),
             ),
-            label: "Hub",
+            label: "Bookings",
           ),
           BottomNavigationBarItem(
-            icon: SvgPicture.asset('assets/chat_icon.svg',
-            width: 24,
+            icon: SvgPicture.asset('assets/+.svg', width: 24, height: 24),
+            label: "Add",
+          ),
+          BottomNavigationBarItem(
+            icon: SvgPicture.asset(
+              'assets/chat_icon.svg',
+              width: 24,
               height: 24,
-              color: Colors.black,),
-              activeIcon: SvgPicture.asset(
+              color: Colors.black,
+            ),
+            activeIcon: SvgPicture.asset(
               "assets/chat_icon.svg",
               width: 24,
               height: 24,
@@ -91,11 +93,13 @@ class _CreativeBottomTabsState extends State<CreativeBottomTabs> {
             label: "Chat",
           ),
           BottomNavigationBarItem(
-            icon: SvgPicture.asset('assets/profile_icon.svg',
-            width: 24,
+            icon: SvgPicture.asset(
+              'assets/profile_icon.svg',
+              width: 24,
               height: 24,
-              color: Colors.black,),
-              activeIcon: SvgPicture.asset(
+              color: Colors.black,
+            ),
+            activeIcon: SvgPicture.asset(
               "assets/profile_icon.svg",
               width: 24,
               height: 24,

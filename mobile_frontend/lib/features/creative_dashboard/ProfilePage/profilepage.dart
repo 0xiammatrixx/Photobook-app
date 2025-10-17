@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_frontend/app/profile_provider.dart';
 import 'package:mobile_frontend/services/authservice.dart';
-import 'package:mobile_frontend/app/ratecard_provider.dart';
 import 'package:mobile_frontend/app/user_provider.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profileedit.dart';
@@ -40,7 +39,7 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
       if (userId == null || token == null) return;
 
       final data = await _profileService.getProfile(userId, token: token);
-       print("🔗 Avatar URL from backend: ${data['basic']?['avatarUrl']}");
+      print("🔗 Avatar URL from backend: ${data['basic']?['avatarUrl']}");
       profileProvider.setProfile(data);
 
       print(
@@ -176,10 +175,15 @@ class ProfileHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "My Profile",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          isOwner
+              ? const Text(
+                  "My Profile",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                )
+              : Text(
+                  "$businessName${businessName.endsWith('s') ? "'" : "'s"} Profile",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
           const SizedBox(height: 5),
           Container(
             decoration: BoxDecoration(
@@ -190,7 +194,26 @@ class ProfileHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                imageWidget,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    imageWidget,
+                    IconButton(
+                      onPressed: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const EditProfilePage(),
+                          ),
+                        );
+                        if (result == true && onEditComplete != null) {
+                          onEditComplete!();
+                        }
+                      },
+                      icon: Icon(Icons.edit, color: Colors.black),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 20),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,6 +227,17 @@ class ProfileHeader extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: List.generate(
+                              5,
+                              (index) => Icon(
+                                Icons.star,
+                                color: Colors.orange,
+                                size: 18,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -276,30 +310,29 @@ class ProfileHeader extends StatelessWidget {
                             width: 83,
                             child: OutlinedButton(
                               style: OutlinedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                side: const BorderSide(color: Colors.black),
+                                backgroundColor: Color(0xFF047418),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 padding: EdgeInsets.zero,
                               ),
-                              onPressed: () async {
-                                final result = await Navigator.push(
+                              onPressed: () {
+                                Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const EditProfilePage(),
+                                    builder: (_) => RateCardPage(
+                                      isOwner: isOwner,
+                                      businessName: businessName,
+                                      avatarUrl: avatarUrl,
+                                    ),
                                   ),
                                 );
-                                // If edit was successful, refresh parent
-                                if (result == true && onEditComplete != null) {
-                                  onEditComplete!();
-                                }
                               },
                               child: const Text(
-                                "Edit Profile",
+                                "Rate Card",
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: Colors.black,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),
@@ -361,26 +394,20 @@ class PortfolioReviewSection extends StatefulWidget {
 
 class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
   bool showPortfolio = true;
-  int? expandedIndex; // which image is expanded
-
-  final List<String> portfolioImages = [
-    "assets/portfolio6.svg",
-    "assets/portfolio5.svg",
-    "assets/portfolio4.svg",
-    "assets/portfolio3.svg",
-    "assets/portfolio2.svg",
-    "assets/portfolio1.svg",
-    "assets/portfolio9.png",
-    "assets/portfolio8.png",
-    "assets/portfolio7.png",
-  ];
+  int? expandedIndex;
 
   @override
   Widget build(BuildContext context) {
+    final profileProvider = Provider.of<ProfileProvider>(context);
+    final creative = profileProvider.profile?['creativeDetails'] ?? {};
+    final portfolio = List<Map<String, dynamic>>.from(
+      creative['portfolio'] ?? [],
+    );
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(15),
-        color: Color(0xFFF5F9F6),
+        color: const Color(0xFFF5F9F6),
       ),
       padding: const EdgeInsets.only(right: 16, left: 16, bottom: 16),
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -393,7 +420,7 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
               TextButton(
                 onPressed: () => setState(() {
                   showPortfolio = true;
-                  expandedIndex = null; // reset any expanded state
+                  expandedIndex = null;
                 }),
                 child: Text(
                   "Portfolio",
@@ -401,7 +428,9 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
                     fontWeight: showPortfolio
                         ? FontWeight.bold
                         : FontWeight.w700,
-                    color: showPortfolio ? Color(0xFF047418) : Colors.black,
+                    color: showPortfolio
+                        ? const Color(0xFF047418)
+                        : Colors.black,
                   ),
                 ),
               ),
@@ -416,7 +445,9 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
                     fontWeight: !showPortfolio
                         ? FontWeight.bold
                         : FontWeight.w700,
-                    color: !showPortfolio ? Color(0xFF047418) : Colors.black,
+                    color: !showPortfolio
+                        ? const Color(0xFF047418)
+                        : Colors.black,
                   ),
                 ),
               ),
@@ -428,10 +459,8 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
               child: expandedIndex == null
-                  ? _buildGrid() // grid view
-                  : _buildExpandedImage(
-                      expandedIndex!,
-                    ), // single expanded image
+                  ? _buildPortfolioGrid(portfolio)
+                  : _buildExpandedItem(portfolio[expandedIndex!]),
             )
           else
             _buildReviewsSection(),
@@ -440,59 +469,153 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
     );
   }
 
-  /// Grid view
-  Widget _buildGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: portfolioImages.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, // 3 per row
-        crossAxisSpacing: 4,
-        mainAxisSpacing: 4,
-      ),
-      itemBuilder: (context, index) {
-        return GestureDetector(
-          onTap: () => setState(() => expandedIndex = index),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(15),
-                  child: Image.asset(portfolioImages[index], fit: BoxFit.cover),
+  /// Portfolio Grid (images/videos)
+  Widget _buildPortfolioGrid(List<Map<String, dynamic>> portfolio) {
+    if (portfolio.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text(
+          "No portfolio items yet.",
+          style: TextStyle(fontSize: 13, color: Colors.grey),
+        ),
+      );
+    }
+
+    final visibleItems = portfolio.length > 9
+        ? portfolio.take(9).toList()
+        : portfolio;
+
+    return Column(
+      children: [
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: visibleItems.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 4,
+            mainAxisSpacing: 4,
+          ),
+          itemBuilder: (context, index) {
+            final item = visibleItems[index];
+            final url = item['url'];
+            final type = item['type'];
+
+            return GestureDetector(
+              onTap: () => setState(() => expandedIndex = index),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: type == 'video'
+                    ? Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Image.network(
+                            url,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.videocam, color: Colors.grey),
+                          ),
+                          const Icon(
+                            Icons.play_circle_fill,
+                            color: Colors.white70,
+                            size: 28,
+                          ),
+                        ],
+                      )
+                    : Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.broken_image, color: Colors.grey),
+                      ),
+              ),
+            );
+          },
+        ),
+        if (portfolio.length > 9)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => FullPortfolioPage(portfolio: portfolio),
+                  ),
+                );
+              },
+              child: const Text(
+                "See more",
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
                 ),
               ),
-              const Positioned(
-                bottom: 12,
-                right: 12,
-                child: Icon(Icons.visibility, color: Colors.white, size: 16),
-              ),
-            ],
+            ),
           ),
-        );
-      },
+      ],
     );
   }
 
-  /// Expanded single image
-  Widget _buildExpandedImage(int index) {
+  /// Expanded single portfolio item (preview mode)
+  Widget _buildExpandedItem(Map<String, dynamic> item) {
+    final url = item['url'];
+    final type = item['type'];
+    final title = item['title'] ?? '';
+    final description = item['description'] ?? '';
+
     return GestureDetector(
-      onTap: () => setState(() => expandedIndex = null), // collapse
-      child: Stack(
+      onTap: () => setState(() => expandedIndex = null),
+      child: Column(
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(15),
-            child: Image.asset(
-              portfolioImages[index],
-              fit: BoxFit.contain,
-              width: double.infinity,
+            child: type == 'video'
+                ? Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.videocam,
+                          size: 80,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.play_circle_outline,
+                        color: Colors.white70,
+                        size: 48,
+                      ),
+                    ],
+                  )
+                : Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.broken_image, color: Colors.grey),
+                  ),
+          ),
+          const SizedBox(height: 8),
+          if (title.isNotEmpty)
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
-          ),
-          const Positioned(
-            top: 12,
-            right: 12,
-            child: Icon(Icons.visibility_off, color: Colors.white, size: 16),
-          ),
+          if (description.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: Text(
+                description,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.black54, fontSize: 12),
+              ),
+            ),
+          const SizedBox(height: 8),
+          const Icon(Icons.visibility_off, color: Colors.grey, size: 16),
         ],
       ),
     );
@@ -676,6 +799,138 @@ class _FullReviewsPageState extends State<FullReviewsPage> {
                       ),
                     )
                   : const SizedBox.shrink();
+            }
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class FullPortfolioPage extends StatefulWidget {
+  final List<Map<String, dynamic>> portfolio;
+
+  const FullPortfolioPage({super.key, required this.portfolio});
+
+  @override
+  State<FullPortfolioPage> createState() => _FullPortfolioPageState();
+}
+
+class _FullPortfolioPageState extends State<FullPortfolioPage> {
+  final ScrollController _controller = ScrollController();
+
+  List<Map<String, dynamic>> loadedItems = [];
+  bool _isLoading = false;
+  bool _hasMore = true;
+  int _page = 1;
+  final int _limit = 9; // load 9 (3x3 grid) at a time
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchMore();
+    _controller.addListener(() {
+      if (_controller.position.pixels >= _controller.position.maxScrollExtent &&
+          !_isLoading &&
+          _hasMore) {
+        _fetchMore();
+      }
+    });
+  }
+
+  Future<void> _fetchMore() async {
+    setState(() => _isLoading = true);
+    await Future.delayed(
+      const Duration(milliseconds: 500),
+    ); // simulate network delay
+
+    final start = (_page - 1) * _limit;
+    final end = start + _limit;
+    final newItems = widget.portfolio.sublist(
+      start,
+      end > widget.portfolio.length ? widget.portfolio.length : end,
+    );
+
+    setState(() {
+      loadedItems.addAll(newItems);
+      _isLoading = false;
+      _page++;
+      if (newItems.length < _limit) _hasMore = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: Colors.white,
+        title: Text(
+          "My Portfolio (${widget.portfolio.length})",
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+      body: Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          color: const Color(0xFFF5F9F6),
+        ),
+        child: GridView.builder(
+          controller: _controller,
+          padding: const EdgeInsets.all(12),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 6,
+            mainAxisSpacing: 6,
+          ),
+          itemCount: loadedItems.length + (_hasMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index < loadedItems.length) {
+              final item = loadedItems[index];
+              final url = item['url'];
+              final type = item['type'];
+
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: type == 'video'
+                    ? Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Image.network(
+                            url,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.videocam, color: Colors.grey),
+                          ),
+                          const Icon(
+                            Icons.play_circle_fill,
+                            color: Colors.white70,
+                            size: 28,
+                          ),
+                        ],
+                      )
+                    : Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.broken_image, color: Colors.grey),
+                      ),
+              );
+            } else {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              );
             }
           },
         ),

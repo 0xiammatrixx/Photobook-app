@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class CreativeHubPage extends StatelessWidget {
-  const CreativeHubPage({super.key});
+class CreativeBookingsPage extends StatelessWidget {
+  const CreativeBookingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {

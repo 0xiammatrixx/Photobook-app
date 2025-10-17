@@ -71,17 +71,12 @@ class MyApp extends StatelessWidget {
   }
 
   Widget _getStartPage() {
-    // 1️⃣ Not seen onboarding → show onboarding first
     if (!seenOnboarding) {
       return OnboardingPage();
     }
-
-    // 2️⃣ Seen onboarding but not logged in → go to login
     if (initialUser == null) {
       return LoginPage();
     }
-
-    // 3️⃣ Logged in → go to dashboard based on role
     final role = initialUser!['role']?.toString().toLowerCase();
 
     if (role == 'photographer') {
@@ -89,7 +84,6 @@ class MyApp extends StatelessWidget {
     } else if (role == 'client') {
       return const BottomTabs();
     } else {
-      // fallback (unknown role or incomplete signup)
       return const RoleSelectionPage();
     }
   }

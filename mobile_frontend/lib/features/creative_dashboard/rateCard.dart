@@ -4,28 +4,56 @@ import 'package:provider/provider.dart';
 
 class RateCardPage extends StatelessWidget {
   final bool isOwner;
-  final String photographerName;
-  final String photographerRole;
-  final String imageUrl;
+  final String businessName;
+  final String? avatarUrl;
 
   const RateCardPage({
     Key? key,
     required this.isOwner,
-    required this.photographerName,
-    required this.photographerRole,
-    required this.imageUrl,
+    required this.businessName,
+    this.avatarUrl,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final services = context.watch<RateCardProvider>().services;
 
+    final imageWidget = avatarUrl != null
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: Image.network(
+              avatarUrl!,
+              width: 117,
+              height: 103,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Image.asset(
+                "assets/profileplaceholder.png",
+                width: 117,
+                height: 103,
+              ),
+            ),
+          )
+        : Image.asset("assets/profileplaceholder.png", width: 117, height: 103);
+
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.close, color: Colors.black),
-          onPressed: () => Navigator.pop(context), // Go back to previous page
-        ),
+        automaticallyImplyLeading: false,
+        title: isOwner
+            ? Text(
+                'My Rate Card',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              )
+            : Text(
+                "$businessName${businessName.endsWith('s') ? "'" : "'s"} Rate Card",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.close, color: Colors.black),
+            onPressed: () => Navigator.pop(context), // Go back to previous page
+          ),
+        ],
         backgroundColor: Colors.white,
         elevation: 0,
       ),
@@ -35,52 +63,98 @@ class RateCardPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Photographer Info
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 35,
-                  backgroundImage: NetworkImage(imageUrl),
-                ),
-                SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      photographerName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                color: const Color(0xFFF5F9F6),
+              ),
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [imageWidget]),
+                  const SizedBox(height: 20),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              businessName,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Row(
+                              children: List.generate(
+                                5,
+                                (index) => Icon(
+                                  Icons.star,
+                                  color: Colors.orange,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    Text(photographerRole),
-                    Row(
-                      children: List.generate(
-                        5,
-                        (index) =>
-                            Icon(Icons.star, color: Colors.orange, size: 18),
+                      Column(
+                        children: [
+                          SizedBox(
+                            height: 31,
+                            width: 83,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: EdgeInsets.zero,
+                                backgroundColor: const Color(0xFFFF7A33),
+                              ),
+                              onPressed: () {},
+                              child: const Text(
+                                "Book Now",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 5),
+                          SizedBox(
+                            height: 31,
+                            width: 83,
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.black),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: EdgeInsets.zero,
+                              ),
+                              onPressed: () {},
+                              child: const Text(
+                                "Message",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
-
-            // Buttons
-            Row(
-              children: [
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
+                    ],
                   ),
-                  child: Text("Book Now"),
-                ),
-                SizedBox(width: 10),
-                OutlinedButton(onPressed: () {}, child: Text("Message")),
-              ],
+                ],
+              ),
             ),
-
             SizedBox(height: 30),
 
             // Rate Card Table
