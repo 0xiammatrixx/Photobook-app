@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:mobile_frontend/features/auth/roleSelection.dart';
 import 'package:mobile_frontend/services/authservice.dart';
 import 'package:mobile_frontend/app/buttons.dart';
-import 'package:mobile_frontend/app/user_provider.dart';
+import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/passwordresetscreen.dart';
 import 'package:mobile_frontend/features/auth/signup/signUpScreen.dart';
 import 'package:mobile_frontend/features/client_dashboard/bottom_nav_bar.dart';
@@ -45,7 +46,10 @@ class _LoginFormState extends State<LoginForm> {
     if (!mounted) return;
 
     if (user != null) {
-      Provider.of<UserProvider>(context, listen: false).setUser(user, user['token']);
+      Provider.of<UserProvider>(
+        context,
+        listen: false,
+      ).setUser(user, user['token']);
 
       final role = user['role'] ?? 'client'; // default to client if null
       Widget nextPage;
@@ -70,15 +74,28 @@ class _LoginFormState extends State<LoginForm> {
   Future<void> _logInWithGoogle() async {
     setState(() => isLoading = true);
     try {
-      final user = await _authService.googleLogin(); // returns Map or null
-
+      final data = await _authService.googleLogin();
       if (!mounted) return;
 
-      if (user != null) {
-        Provider.of<UserProvider>(context, listen: false).setUser(user, user['token']);
+      if (data != null) {
+        final user = data['user'];
+        final token = data['token'];
+        Provider.of<UserProvider>(context, listen: false).setUser(user, token);
+
+        final role = user['role']?.toString().toLowerCase();
+        Widget nextPage;
+
+        if (role == 'photographer') {
+          nextPage = CreativeBottomTabs();
+        } else if (role == 'client') {
+          nextPage = BottomTabs();
+        } else {
+          nextPage = RoleSelectionPage(); // ✅ new user, no role yet
+        }
+
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => BottomTabs()),
+          MaterialPageRoute(builder: (_) => nextPage),
         );
       } else {
         ScaffoldMessenger.of(
@@ -88,11 +105,6 @@ class _LoginFormState extends State<LoginForm> {
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
-  }
-
-  void _logInWithFacebook() {
-    // Facebook SignIn
-    print('Facebook Login');
   }
 
   @override
@@ -259,30 +271,6 @@ class _LoginFormState extends State<LoginForm> {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Facebook button
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: OutlinedButton.icon(
-              onPressed: _logInWithFacebook,
-              style: OutlinedButton.styleFrom(
-                backgroundColor: Color(0xFFEEEEEE),
-                side: BorderSide(color: Color(0xFFEEEEEE)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              icon: SvgPicture.asset('assets/facebookicon.svg', height: 20),
-              label: const Text(
-                'Login with Facebook',
-                style: TextStyle(
-                  color: Color(0xFF181818),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );

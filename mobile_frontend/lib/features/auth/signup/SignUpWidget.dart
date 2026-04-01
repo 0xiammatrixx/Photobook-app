@@ -1,9 +1,11 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:mobile_frontend/features/client_dashboard/bottom_nav_bar.dart';
+import 'package:mobile_frontend/features/creative_dashboard/bottom_nav_bar.dart';
+import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/services/authservice.dart';
 import 'package:mobile_frontend/app/buttons.dart';
-import 'package:mobile_frontend/app/user_provider.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/auth/roleSelection.dart';
 import 'package:mobile_frontend/features/auth/verificationscreen.dart';
@@ -41,13 +43,13 @@ class _SignUpFormState extends State<SignUpForm> {
 
   setState(() => isLoading = false);
 
-  if (!mounted) return;
+  if (!mounted) return;                                                                                                                                                                                                                                                                                                                                                                                                          
 
   if (success) {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => VerificationPage(email: _emailController.text.trim()),
+        builder: (_) => VerificationPage(email: _emailController.text.trim()),//email: _emailController.text.trim() in the brackets for verification page
       ),
     );
   } else {
@@ -59,32 +61,41 @@ class _SignUpFormState extends State<SignUpForm> {
 
 
   Future<void> _signInWithGoogle() async {
-    setState(() => isLoading = true);
-    try {
-      final user = await _authService.googleLogin();
+  setState(() => isLoading = true);
+  try {
+    final data = await _authService.googleLogin();
+    if (!mounted) return;
 
-      if (!mounted) return;
+    if (data != null) {
+      final user = data['user'];
+      final token = data['token'];
+      Provider.of<UserProvider>(context, listen: false).setUser(user, token);
 
-      if (user != null) {
-        Provider.of<UserProvider>(context, listen: false).setUser(user, user['token']);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => RoleSelectionPage()),
-        );
+      final role = user['role']?.toString().toLowerCase();
+
+      Widget nextPage;
+      // No role = new user, needs to pick
+      if (role == null || role.isEmpty || role == 'null') {
+        nextPage = RoleSelectionPage(); // ✅ first time
+      } else if (role == 'photographer') {
+        nextPage = CreativeBottomTabs(); // ✅ returning creative
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Google login failed')));
+        nextPage = BottomTabs(); // ✅ returning client
       }
-    } finally {
-      if (mounted) setState(() => isLoading = false);
-    }
-  }
 
-  void _signInWithFacebook() {
-    // Facebook SignIn
-    print('Facebook Sign-In');
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => nextPage),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google sign in failed')),
+      );
+    }
+  } finally {
+    if (mounted) setState(() => isLoading = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -281,30 +292,6 @@ class _SignUpFormState extends State<SignUpForm> {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Facebook button
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: OutlinedButton.icon(
-              onPressed: _signInWithFacebook,
-              style: OutlinedButton.styleFrom(
-                backgroundColor: Color(0xFFEEEEEE),
-                side: BorderSide(color: Color(0xFFEEEEEE)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              icon: SvgPicture.asset('assets/facebookicon.svg', height: 20),
-              label: const Text(
-                'Continue with Facebook',
-                style: TextStyle(
-                  color: Color(0xFF181818),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );

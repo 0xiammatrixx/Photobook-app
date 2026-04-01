@@ -38,7 +38,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
       }
 
       final response = await http.patch(
-        Uri.parse("http://10.0.2.2:5000/api/auth/role"),
+        Uri.parse("https://api.photobookhq.com/api/auth/role"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -47,20 +47,29 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
       );
 
       if (response.statusCode == 200) {
+        // ✅ Parse the response and save the new token
+        final responseData = jsonDecode(response.body);
+
+        // Adjust key names to match what your backend actually returns
+        final newToken = responseData['token'] ?? responseData['accessToken'];
+
+        if (newToken != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('token', newToken); // 🔑 overwrite old token
+        }
+
         if (!mounted) return;
-        if (mounted) {
-          if (roleForBackend == "photographer") {
+
+        if (roleForBackend == "photographer") {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => BusinessNamePage()),
           );
-        } else if(roleForBackend == "client"){
+        } else if (roleForBackend == "client") {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => BottomTabs()),
           );
-        }
-        
         }
       } else {
         final err = jsonDecode(response.body);

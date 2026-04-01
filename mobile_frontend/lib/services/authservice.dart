@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const String baseUrl = 'http://10.0.2.2:5000/api/auth'; //'http://172.20.10.5:5000/api/auth';
+  static const String baseUrl = 'https://api.photobookhq.com/api/auth';
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     serverClientId:
@@ -26,7 +26,7 @@ class AuthService {
       body: jsonEncode({'email': email, 'password': password}),
     );
 
-    if (res.statusCode == 200) {
+    if (res.statusCode == 200 || res.statusCode == 201) {
       final data = jsonDecode(res.body);
       final user = data['user'];
       user['token'] = data['token'];
@@ -46,8 +46,23 @@ class AuthService {
         body: jsonEncode({"name": name, "email": email, "password": password}),
       );
 
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 || res.statusCode == 201) {
         return true;
+      } else if (res.statusCode == 400) {
+        final body = jsonDecode(res.body);
+        // Account created but email failed — treat as success, resend will handle it
+        if (body['message'].toString().contains('email') ||
+            body['message'].toString().contains('Failed to send')) {
+          print(
+            "⚠️ Account created but email failed. Redirecting to verify...",
+          );
+          return true; // navigate to verification so user can resend
+        }
+        print("❌ Signup failed (400): ${res.body}");
+        return false;
+      } else if (res.statusCode == 409) {
+        print("⚠️ Email already exists");
+        return true; // already registered, go to verification to resend
       } else {
         print("❌ Signup failed (${res.statusCode}): ${res.body}");
         return false;
@@ -67,14 +82,12 @@ class AuthService {
 
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body);
-
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('token', data['token']);
       await prefs.setString('user', jsonEncode(data['user']));
-
       return true;
     } else {
-      print("Verify email failed: ${res.body}");
+      print("Verify email failed [${res.statusCode}]: ${res.body}");
       return false;
     }
   }
@@ -82,12 +95,12 @@ class AuthService {
   Future<bool> resendVerification(String email) async {
     try {
       final res = await http.post(
-        Uri.parse('$baseUrl/resend-verification'),
+        Uri.parse('$baseUrl/verify-email/resend'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"email": email}),
       );
 
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 || res.statusCode == 201) {
         return true;
       } else {
         print("❌ Resend failed: ${res.body}");
@@ -105,20 +118,28 @@ class AuthService {
       final account = await _googleSignIn.signIn();
       if (account == null) return null;
 
-      final auth = await account.authentication;
-      final accessToken = auth.accessToken;
-      if (accessToken == null) return null;
+      // Send the full profile object the backend expects
+      final profile = {
+        "id": account.id,
+        "email": account.email,
+        "name": account.displayName,
+        "photoUrl": account.photoUrl,
+      };
+
+      print("📤 Google profile: $profile");
 
       final res = await http.post(
-        Uri.parse('$baseUrl/google'),
+        Uri.parse('$baseUrl/auth/google'), // ✅ fixed URL
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'access_token': accessToken}),
+        body: jsonEncode({'profile': profile}),
       );
 
-      if (res.statusCode == 200) {
+      print("📥 Google login response: ${res.statusCode} ${res.body}");
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
         final data = jsonDecode(res.body);
         await _saveAuthData(data['token'], data['user']);
-        return data['user'];
+        return data; // ✅ return full data so caller can read role
       } else {
         print('Google login failed: ${res.body}');
         return null;
@@ -134,8 +155,8 @@ class AuthService {
     final token = prefs.getString('token');
     if (token == null) return null;
 
-    final res = await http.put(
-      Uri.parse('$baseUrl/profile'),
+    final res = await http.patch(
+      Uri.parse('https://api.photobookhq.com/api/profiles/photographer'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -143,12 +164,15 @@ class AuthService {
       body: jsonEncode({'businessName': businessName}),
     );
 
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
+    print("Business name response: ${res.statusCode} ${res.body}");
 
-      // Save locally
-      await _saveAuthData(token, data['user']);
-      return data['user'];
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      final data = jsonDecode(res.body);
+      final profile = data['profile'];
+      if (profile != null && profile is Map<String, dynamic>) {
+        return profile;
+      }
+      return null;
     } else {
       print("Update business name failed: ${res.body}");
       return null;
@@ -169,5 +193,31 @@ class AuthService {
     await prefs.remove('token');
     await prefs.remove('user');
     // await _googleSignIn.signOut();
+  }
+
+  Future<bool> deleteAccount() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    final userJson = prefs.getString('user');
+    final userId = jsonDecode(
+      userJson!,
+    )['id']; // or '_id' depending on your API
+
+    final res = await http.delete(
+      Uri.parse('https://api.photobookhq.com/api/users/me'),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+      body: jsonEncode({"userId": userId}),
+    );
+
+    if (res.statusCode == 200) {
+      await prefs.clear(); // wipe token + user data
+      return true;
+    } else {
+      print("Delete account failed [${res.statusCode}]: ${res.body}");
+      return false;
+    }
   }
 }

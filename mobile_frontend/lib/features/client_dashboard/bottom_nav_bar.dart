@@ -15,7 +15,7 @@ class BottomTabs extends StatefulWidget {
 class _BottomTabsState extends State<BottomTabs> {
   int _selectedIndex = 0;
 
-  final List<Widget> _pages = const [
+  final List<Widget> _pages =  [
     HomeScreen(),
     HubScreen(),
     ChatScreen(),

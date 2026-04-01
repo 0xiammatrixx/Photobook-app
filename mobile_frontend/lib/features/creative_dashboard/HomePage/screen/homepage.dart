@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_frontend/app/count_up_effect.dart';
-import 'package:mobile_frontend/app/user_provider.dart';
+import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/creative_dashboard/HomePage/model/booking_model.dart';
+import 'package:mobile_frontend/providers/user_provider.dart';
+import 'package:mobile_frontend/services/authservice.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 
@@ -14,6 +16,46 @@ class CreativeHomePage extends StatefulWidget {
 }
 
 class _CreativeHomePageState extends State<CreativeHomePage> {
+  final AuthService _authService = AuthService();
+
+  void _confirmDelete(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text("Delete Account"),
+      content: const Text(
+        "Are you sure? This action is permanent and cannot be undone.",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text("Cancel"),
+        ),
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          onPressed: () async {
+            Navigator.pop(ctx); // close dialog
+            final success = await _authService.deleteAccount();
+            if (success && context.mounted) {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginPage()),
+                (route) => false, // clears the entire nav stack
+              );
+            } else if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Failed to delete account. Try again.")),
+              );
+            }
+          },
+          child: const Text("Delete"),
+        ),
+      ],
+    ),
+  );
+}
+
+
   // Dummy Data
   final List<Booking> bookings = [
     Booking(
@@ -78,7 +120,7 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Greeting
+              
               Text(
                 businessName != null && businessName.isNotEmpty
                     ? "Hello $firstName ($businessName),"

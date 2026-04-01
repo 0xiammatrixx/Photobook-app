@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/services/authservice.dart';
-import 'package:mobile_frontend/app/user_provider.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/client_dashboard/ProfileScreen/editclientprofile.dart';
 import 'package:provider/provider.dart';
 
 class ClientProfileScreen extends StatelessWidget {
-  const ClientProfileScreen({super.key});
+  ClientProfileScreen({super.key});
+  final AuthService _authService = AuthService();
 
   Future<void> _logout(BuildContext context) async {
     await AuthService().logout();
@@ -15,6 +16,45 @@ class ClientProfileScreen extends StatelessWidget {
     Navigator.of(
       context,
     ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Account"),
+        content: const Text(
+          "Are you sure? This action is permanent and cannot be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(ctx); // close dialog
+              final success = await _authService.deleteAccount();
+              if (success && context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  (route) => false, // clears the entire nav stack
+                );
+              } else if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Failed to delete account. Try again."),
+                  ),
+                );
+              }
+            },
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -26,22 +66,9 @@ class ClientProfileScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              ProfileHeader(),
-              Text("Logged in/signed in successfully"),
-              SizedBox(height: 30),
-              SizedBox(
-                width: 150,
-                child: ElevatedButton(
-                  onPressed: () => _logout(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFAA0A0A),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular((15)),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  child: Text('Logout', style: TextStyle(color: Colors.white)),
-                ),
+              ProfileHeader(
+                onLogout: () => _logout(context),
+                onDeleteAccount: () => _confirmDelete(context),
               ),
             ],
           ),
@@ -52,7 +79,9 @@ class ClientProfileScreen extends StatelessWidget {
 }
 
 class ProfileHeader extends StatelessWidget {
-  const ProfileHeader({super.key});
+  final VoidCallback? onLogout;
+  final VoidCallback? onDeleteAccount;
+  const ProfileHeader({super.key, this.onLogout, this.onDeleteAccount});
 
   @override
   Widget build(BuildContext context) {
@@ -64,10 +93,53 @@ class ProfileHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "My Profile",
-            textAlign: TextAlign.start,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "My Profile",
+                textAlign: TextAlign.start,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              PopupMenuButton<String>(
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                icon: const Icon(Icons.more_vert, color: Colors.black),
+                onSelected: (value) {
+                  if (value == 'logout' && onLogout != null) {
+                    onLogout!();
+                  } else if (value == 'delete' && onDeleteAccount != null) {
+                    onDeleteAccount!();
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'logout',
+                    child: Text(
+                      'Logout',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text(
+                      'Delete Account',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           const SizedBox(height: 5),
           Container(
@@ -87,7 +159,7 @@ class ProfileHeader extends StatelessWidget {
                     height: 103,
                     fit: BoxFit.cover,
                     placeholderBuilder: (context) =>
-                        const CircularProgressIndicator(),
+                        const CircularProgressIndicator(color: Color(0xFFFF7A33)),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -119,8 +191,9 @@ class ProfileHeader extends StatelessWidget {
                               Icon(
                                 Icons.location_on,
                                 size: 15,
-                                color: Colors.black,),
-                                SizedBox(width: 5,),
+                                color: Colors.black,
+                              ),
+                              SizedBox(width: 5),
                               Text(
                                 "Abuja, Nigeria",
                                 style: TextStyle(
@@ -129,16 +202,13 @@ class ProfileHeader extends StatelessWidget {
                                 ),
                               ),
                             ],
-                          )
+                          ),
                         ],
                       ),
                     ),
                     Column(
                       children: [
-                        SizedBox(
-                          height: 31,
-                          width: 83,
-                        ),
+                        SizedBox(height: 31, width: 83),
                         SizedBox(height: 5),
                         SizedBox(
                           height: 31,

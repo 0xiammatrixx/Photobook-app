@@ -28,8 +28,6 @@ class _CountUpTextState extends State<CountUpText> {
   void initState() {
     super.initState();
     
-    print('🚀 CountUpText initState - Duration: ${widget.duration}, End: ${widget.endValue}');
-    
     // Calculate how many steps we need and timing
     _totalSteps = widget.endValue;
     _stepDuration = widget.duration.inMilliseconds ~/ _totalSteps;
@@ -40,7 +38,6 @@ class _CountUpTextState extends State<CountUpText> {
       _totalSteps = widget.duration.inMilliseconds ~/ _stepDuration;
     }
     
-    print('📊 Steps: $_totalSteps, Step duration: ${_stepDuration}ms');
     
     _startTime = DateTime.now();
     _startAnimation();
@@ -57,7 +54,6 @@ class _CountUpTextState extends State<CountUpText> {
           _currentValue = widget.endValue;
         });
         _timer.cancel();
-        print('✅ Animation completed in ${elapsed.inMilliseconds}ms');
       } else {
         // Update current value based on progress
         final newValue = (widget.endValue * progress).round();
@@ -68,7 +64,6 @@ class _CountUpTextState extends State<CountUpText> {
           
           // Log every 1 second of progress
           if ((progress * 100).round() % 10 == 0) {
-            print('📈 Progress: ${(progress * 100).round()}% - Value: $newValue at ${elapsed.inMilliseconds}ms');
           }
         }
       }
@@ -76,7 +71,6 @@ class _CountUpTextState extends State<CountUpText> {
   }
 
   void restartAnimation() {
-    print('🔄 Restarting timer-based animation');
     _timer.cancel();
     setState(() {
       _currentValue = 0;
@@ -95,7 +89,6 @@ class _CountUpTextState extends State<CountUpText> {
 
   @override
   void dispose() {
-    print('💀 CountUpText disposed');
     _timer.cancel();
     super.dispose();
   }
@@ -127,8 +120,6 @@ class _CountUpFormattedTextState extends State<CountUpFormattedText> {
   void initState() {
     super.initState();
     
-    print('🚀 CountUpFormattedText initState - Duration: ${widget.duration}, End: ${widget.endValue}');
-    
     // Update every 50ms for smooth animation
     _stepDuration = 50;
     _startTime = DateTime.now();
@@ -145,7 +136,6 @@ class _CountUpFormattedTextState extends State<CountUpFormattedText> {
           _currentValue = widget.endValue;
         });
         _timer.cancel();
-        print('✅ Formatted animation completed in ${elapsed.inMilliseconds}ms');
       } else {
         final newValue = (widget.endValue * progress).round();
         if (newValue != _currentValue) {
@@ -158,7 +148,6 @@ class _CountUpFormattedTextState extends State<CountUpFormattedText> {
   }
 
   void restartAnimation() {
-    print('🔄 Restarting formatted timer-based animation');
     _timer.cancel();
     setState(() {
       _currentValue = 0;
@@ -177,7 +166,6 @@ class _CountUpFormattedTextState extends State<CountUpFormattedText> {
 
   @override
   void dispose() {
-    print('💀 CountUpFormattedText disposed');
     _timer.cancel();
     super.dispose();
   }

@@ -1,22 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:mobile_frontend/app/profile_provider.dart';
-import 'package:mobile_frontend/app/splashscreen/splashscreen.dart';
-import 'package:mobile_frontend/features/client_dashboard/bottom_nav_bar.dart';
+import 'package:mobile_frontend/providers/search_provider.dart';
+import 'package:mobile_frontend/providers/sessions_provider.dart';
+import 'providers/booking_provider.dart';
+import 'package:mobile_frontend/services/profileservice.dart';
+import 'features/client_dashboard/bottom_nav_bar.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:mobile_frontend/app/ratecard_provider.dart';
-import 'package:mobile_frontend/app/user_provider.dart';
-import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
-import 'package:mobile_frontend/features/auth/signup/signUpScreen.dart';
-import 'package:mobile_frontend/features/auth/roleSelection.dart';
-import 'package:mobile_frontend/features/auth/passwordreset/newpasswordpage.dart';
-import 'package:mobile_frontend/features/auth/passwordreset/passwordmail.dart';
-import 'package:mobile_frontend/features/auth/passwordreset/resetsuccessful.dart';
-import 'package:mobile_frontend/features/auth/verificationscreen.dart';
-import 'package:mobile_frontend/features/creative_dashboard/bottom_nav_bar.dart';
-import 'package:mobile_frontend/services/authservice.dart';
+import 'providers/profile_provider.dart';
+import 'providers/ratecard_provider.dart';
+import 'providers/user_provider.dart';
+import 'features/auth/login/loginscreen.dart';
+import 'features/auth/roleSelection.dart';
+import 'features/creative_dashboard/bottom_nav_bar.dart';
+import 'services/authservice.dart';
+import 'app/splashscreen/splashscreen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,11 +22,21 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final seenOnboarding = prefs.getBool('seenOnboarding') ?? false;
 
-  final authService = AuthService();
-  final savedUser = await authService.getUser();
-
   final userProvider = UserProvider();
   await userProvider.loadUser();
+
+  bool tokenValid = false;
+  if (userProvider.token != null) {
+    try {
+      final profileService = ProfilePortfolioService();
+      await profileService.getProfile(token: userProvider.token!);
+      tokenValid = true;
+    } catch (e) {
+      await AuthService().logout();
+      await userProvider.loadUser();
+      tokenValid = false;
+    }
+  }
 
   runApp(
     MultiProvider(
@@ -36,9 +44,12 @@ void main() async {
         ChangeNotifierProvider.value(value: userProvider),
         ChangeNotifierProvider(create: (_) => ProfileProvider()),
         ChangeNotifierProvider(create: (_) => RateCardProvider()),
+        ChangeNotifierProvider(create: (_) => BookingProvider()),
+        ChangeNotifierProvider(create: (_) => SessionsProvider()),
+        ChangeNotifierProvider(create: (_) => SearchProvider()),
       ],
       child: MyApp(
-        initialUser: savedUser,
+        initialUser: tokenValid ? userProvider.user : null,
         seenOnboarding: seenOnboarding,
         
       ),

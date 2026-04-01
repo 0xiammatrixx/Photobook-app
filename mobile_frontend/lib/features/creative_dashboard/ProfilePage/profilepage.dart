@@ -1,7 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:mobile_frontend/app/profile_provider.dart';
+import 'package:http/http.dart' as http;
+import 'package:mobile_frontend/features/client_dashboard/BookScreen/book.dart';
+import 'package:mobile_frontend/features/creative_dashboard/AddPortfolioPage/video_portfolio_item.dart';
+import 'package:mobile_frontend/providers/profile_provider.dart';
 import 'package:mobile_frontend/services/authservice.dart';
-import 'package:mobile_frontend/app/user_provider.dart';
+import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profileedit.dart';
 import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/reviewmodel.dart';
@@ -10,7 +15,10 @@ import 'package:mobile_frontend/services/profileservice.dart';
 import 'package:provider/provider.dart';
 
 class CreativeProfilePage extends StatefulWidget {
-  const CreativeProfilePage({super.key});
+  final bool isOwner;
+  final String? creativeId;
+
+  const CreativeProfilePage({super.key, this.isOwner = true, this.creativeId});
 
   @override
   State<CreativeProfilePage> createState() => _CreativeProfilePageState();
@@ -18,6 +26,7 @@ class CreativeProfilePage extends StatefulWidget {
 
 class _CreativeProfilePageState extends State<CreativeProfilePage> {
   final _profileService = ProfilePortfolioService();
+  final AuthService _authService = AuthService();
   bool _loading = true;
 
   @override
@@ -27,6 +36,7 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
   }
 
   Future<void> _loadProfile({bool initial = false}) async {
+    setState(() => _loading = true);
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final profileProvider = Provider.of<ProfileProvider>(
@@ -34,20 +44,128 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
         listen: false,
       );
 
-      final userId = userProvider.user?['_id'];
       final token = userProvider.token;
-      if (userId == null || token == null) return;
+      if (token == null) {
+        _redirectToLogin();
+        return;
+      }
 
-      final data = await _profileService.getProfile(userId, token: token);
-      print("🔗 Avatar URL from backend: ${data['basic']?['avatarUrl']}");
-      profileProvider.setProfile(data);
+      Map<String, dynamic> raw;
+      List<dynamic> portfolioData = [];
 
-      print(
-        "🧩 Profile loaded for ${data['role']}, isOwner: ${data['isOwner']}",
-      );
+      if (widget.isOwner) {
+        final data = await _profileService.getProfile(token: token);
+        raw = data['profile'] as Map<String, dynamic>;
+        portfolioData = await _profileService.getMyPortfolio(token: token);
+      } else {
+        final data = await _profileService.getProfile(
+          token: token,
+          userId: widget
+              .creativeId, // ✅ optional userId — if provided, fetches that user's profile
+        );
+        raw = data['profile'] ?? data;
+
+        final portfolioRes = await http.get(
+          Uri.parse(
+            'https://api.photobookhq.com/api/search/portfolio?photographerId=${widget.creativeId}',
+          ),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        print(
+          "📸 Public portfolio: ${portfolioRes.statusCode} ${portfolioRes.body}",
+        );
+        if (portfolioRes.statusCode == 200) {
+          final pData = jsonDecode(portfolioRes.body);
+          final items = pData is List
+              ? pData
+              : pData['items'] ?? pData['results'] ?? [];
+
+          portfolioData = List<dynamic>.from(items).map((item) {
+            final m = Map<String, dynamic>.from(item);
+            return {
+              ...m,
+              'url': m['media_url'] ?? m['url'],
+              'type': m['media_type'] ?? m['type'],
+            };
+          }).toList();
+        }
+      }
+
+      final remapped = {
+        'role': raw['role'] ?? 'photographer',
+        'isOwner': widget.isOwner,
+        'basic': {
+          'businessName': raw['business_name'] ?? raw['businessName'],
+          'avatarUrl':
+              raw['photographer_profile_photo_url'] ?? raw['avatarUrl'],
+          'displayTitle': raw['display_title'] ?? raw['displayTitle'],
+          'tags': List<String>.from(raw['tags'] ?? []),
+        },
+        'creativeDetails': {
+          'aboutMe': raw['about_me'] ?? raw['aboutMe'] ?? '',
+          'portfolio': portfolioData,
+          'starRating': raw['star_rating'] ?? raw['starRating'],
+          'totalReviews': raw['total_reviews'] ?? raw['totalReviews'],
+        },
+      };
+
+      profileProvider.setProfile(remapped);
     } catch (e) {
       print("❌ Error loading profile: $e");
+      if (e.toString().contains('UNAUTHORIZED')) {
+        await AuthService().logout();
+        _redirectToLogin();
+      }
+    } finally {
+      setState(() => _loading = false);
     }
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Account"),
+        content: const Text(
+          "Are you sure? This action is permanent and cannot be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(ctx); // close dialog
+              final success = await _authService.deleteAccount();
+              if (success && context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  (route) => false, // clears the entire nav stack
+                );
+              } else if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Failed to delete account. Try again."),
+                  ),
+                );
+              }
+            },
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _redirectToLogin() {
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -64,7 +182,11 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
     final userProvider = Provider.of<UserProvider>(context);
 
     if (profile == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFFF7A33)),
+        ),
+      );
     }
 
     final basic = profile['basic'] ?? {};
@@ -80,6 +202,8 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: RefreshIndicator(
+        color: Color(0xFFFF7A33),
+        backgroundColor: Colors.white,
         onRefresh: () => _loadProfile(initial: false),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -90,41 +214,33 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
                 Consumer<ProfileProvider>(
                   builder: (context, profileProvider, _) {
                     final basic = profileProvider.profile?['basic'] ?? {};
+                    final creative =
+                        profileProvider.profile?['creativeDetails'] ?? {};
                     return ProfileHeader(
                       businessName: businessName,
                       avatarUrl: basic['avatarUrl'],
                       role: role,
                       isOwner: isOwner,
+                      displayTitle: basic['displayTitle'],
+                      tags: List<String>.from(basic['tags'] ?? []),
+                      creativeId: widget.isOwner ? null : widget.creativeId,
+                      starRating:
+                          double.tryParse(
+                            creative['starRating']?.toString() ?? '0',
+                          ) ??
+                          0,
+                      totalReviews: creative['totalReviews'] ?? 0,
                       onEditComplete: () {
                         setState(() {});
                       },
+                      onLogout: () => _logout(context),
+                      onDeleteAccount: () => _confirmDelete(context),
                     );
                   },
                 ),
                 AboutMeSection(about: creative['aboutMe'] ?? ''),
                 PortfolioReviewSection(),
                 const SizedBox(height: 20),
-                //if (isOwner)
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => _logout(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFAA0A0A),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                      ),
-                      child: const Text(
-                        'Logout',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -140,7 +256,14 @@ class ProfileHeader extends StatelessWidget {
   final String? avatarUrl;
   final String role;
   final bool isOwner;
+  final String? displayTitle;
+  final List<String> tags;
+  final String? creativeId;
+  final double starRating;
+  final int totalReviews;
   final VoidCallback? onEditComplete;
+  final VoidCallback? onLogout;
+  final VoidCallback? onDeleteAccount;
 
   const ProfileHeader({
     super.key,
@@ -148,7 +271,14 @@ class ProfileHeader extends StatelessWidget {
     required this.avatarUrl,
     required this.role,
     required this.isOwner,
+    this.tags = const [],
+    this.creativeId,
+    this.displayTitle,
+    this.starRating = 0,
+    this.totalReviews = 0,
     this.onEditComplete,
+    this.onLogout,
+    this.onDeleteAccount,
   });
 
   @override
@@ -175,15 +305,69 @@ class ProfileHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          isOwner
-              ? const Text(
-                  "My Profile",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                )
-              : Text(
-                  "$businessName${businessName.endsWith('s') ? "'" : "'s"} Profile",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  if (!isOwner)
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: const Icon(Icons.arrow_back, color: Colors.black),
+                    ),
+                  if (!isOwner) const SizedBox(width: 8),
+                  Text(
+                    isOwner
+                        ? "My Profile"
+                        : "$businessName${businessName.endsWith('s') ? "'" : "'s"} Profile",
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              if (isOwner)
+                PopupMenuButton<String>(
+                  color: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  icon: const Icon(Icons.more_vert, color: Colors.black),
+                  onSelected: (value) {
+                    if (value == 'logout' && onLogout != null) {
+                      onLogout!();
+                    } else if (value == 'delete' && onDeleteAccount != null) {
+                      onDeleteAccount!();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'logout',
+                      child: Text(
+                        'Logout',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text(
+                        'Delete Account',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+            ],
+          ),
           const SizedBox(height: 5),
           Container(
             decoration: BoxDecoration(
@@ -198,20 +382,21 @@ class ProfileHeader extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     imageWidget,
-                    IconButton(
-                      onPressed: () async {
-                        final result = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const EditProfilePage(),
-                          ),
-                        );
-                        if (result == true && onEditComplete != null) {
-                          onEditComplete!();
-                        }
-                      },
-                      icon: Icon(Icons.edit, color: Colors.black),
-                    ),
+                    if (isOwner)
+                      IconButton(
+                        onPressed: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const EditProfilePage(),
+                            ),
+                          );
+                          if (result == true && onEditComplete != null) {
+                            onEditComplete!();
+                          }
+                        },
+                        icon: const Icon(Icons.edit, color: Colors.black),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -231,28 +416,78 @@ class ProfileHeader extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Row(
-                            children: List.generate(
-                              5,
-                              (index) => Icon(
-                                Icons.star,
-                                color: Colors.orange,
-                                size: 18,
+                            children: [
+                              ...List.generate(
+                                5,
+                                (i) => Icon(
+                                  i < starRating.round()
+                                      ? Icons.star
+                                      : Icons.star_border,
+                                  color: Colors.orange,
+                                  size: 18,
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 6),
+                              Text(
+                                totalReviews > 0
+                                    ? "${starRating.toStringAsFixed(1)} ($totalReviews)"
+                                    : "No reviews yet",
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            role == 'photographer' ? "Photographer" : "Client",
+                            displayTitle?.isNotEmpty == true
+                                ? displayTitle!
+                                : role == 'photographer'
+                                ? 'Photographer'
+                                : 'Client',
                             style: const TextStyle(
                               color: Colors.grey,
-                              fontSize: 10,
+                              fontSize: 12,
                             ),
                           ),
+                          if (tags.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: tags
+                                  .map(
+                                    (tag) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFFFF7A33,
+                                        ).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: const Color(0xFFFF7A33),
+                                          width: 0.8,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        tag,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Color(0xFFFF7A33),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ],
                         ],
                       ),
                     ),
-
-                    // Hide buttons if user is viewing their own profile
                     if (!isOwner)
                       Column(
                         children: [
@@ -267,7 +502,20 @@ class ProfileHeader extends StatelessWidget {
                                 padding: EdgeInsets.zero,
                                 backgroundColor: const Color(0xFFFF7A33),
                               ),
-                              onPressed: () {},
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => BookingPage(
+                                      creativeId:
+                                          creativeId!, // ✅ need to pass this in
+                                      name: businessName,
+                                      avatarUrl: avatarUrl ?? '',
+                                      rating: starRating,
+                                    ),
+                                  ),
+                                );
+                              },
                               child: const Text(
                                 "Book Now",
                                 style: TextStyle(
@@ -300,17 +548,13 @@ class ProfileHeader extends StatelessWidget {
                               ),
                             ),
                           ),
-                        ],
-                      )
-                    else
-                      Column(
-                        children: [
+                          const SizedBox(height: 5),
                           SizedBox(
                             height: 31,
                             width: 83,
                             child: OutlinedButton(
                               style: OutlinedButton.styleFrom(
-                                backgroundColor: Color(0xFF047418),
+                                backgroundColor: const Color(0xFF047418),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
@@ -324,6 +568,8 @@ class ProfileHeader extends StatelessWidget {
                                       isOwner: isOwner,
                                       businessName: businessName,
                                       avatarUrl: avatarUrl,
+                                      creativeId: creativeId ?? '',
+                                      rating: starRating,
                                     ),
                                   ),
                                 );
@@ -338,6 +584,38 @@ class ProfileHeader extends StatelessWidget {
                             ),
                           ),
                         ],
+                      )
+                    else
+                      SizedBox(
+                        height: 31,
+                        width: 83,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: const Color(0xFF047418),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            padding: EdgeInsets.zero,
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => RateCardPage(
+                                  isOwner: isOwner,
+                                  businessName: businessName,
+                                  avatarUrl: avatarUrl,
+                                  creativeId: creativeId ?? '',
+                                  rating: starRating,
+                                ),
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            "Rate Card",
+                            style: TextStyle(fontSize: 10, color: Colors.white),
+                          ),
+                        ),
                       ),
                   ],
                 ),
@@ -498,37 +776,34 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
           ),
           itemBuilder: (context, index) {
             final item = visibleItems[index];
-            final url = item['url'];
-            final type = item['type'];
+            final url = item['url']?.toString() ?? '';
+            final type = item['type']?.toString() ?? '';
 
-            return GestureDetector(
-              onTap: () => setState(() => expandedIndex = index),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: type == 'video'
-                    ? Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Image.network(
-                            url,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                const Icon(Icons.videocam, color: Colors.grey),
-                          ),
-                          const Icon(
-                            Icons.play_circle_fill,
-                            color: Colors.white70,
-                            size: 28,
-                          ),
-                        ],
-                      )
-                    : Image.network(
+            if (url.isEmpty) return const SizedBox.shrink();
+
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: type == 'video'
+                  ? VideoThumbnail(
+                      key: ValueKey(url),
+                      url: url,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              VideoPlayerPage(key: ValueKey(url), url: url),
+                        ),
+                      ),
+                    )
+                  : GestureDetector(
+                      onTap: () => setState(() => expandedIndex = index),
+                      child: Image.network(
                         url,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) =>
                             const Icon(Icons.broken_image, color: Colors.grey),
                       ),
-              ),
+                    ),
             );
           },
         ),
@@ -560,10 +835,12 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection> {
 
   /// Expanded single portfolio item (preview mode)
   Widget _buildExpandedItem(Map<String, dynamic> item) {
-    final url = item['url'];
-    final type = item['type'];
-    final title = item['title'] ?? '';
-    final description = item['description'] ?? '';
+    final url = item['url']?.toString() ?? '';
+    final type = item['type']?.toString() ?? '';
+    final title = item['title']?.toString() ?? '';
+    final description = item['description']?.toString() ?? '';
+
+    if (url.isEmpty) return const SizedBox.shrink();
 
     return GestureDetector(
       onTap: () => setState(() => expandedIndex = null),
@@ -795,7 +1072,9 @@ class _FullReviewsPageState extends State<FullReviewsPage> {
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.all(16),
-                        child: CircularProgressIndicator(),
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFFF7A33),
+                        ),
                       ),
                     )
                   : const SizedBox.shrink();
@@ -839,10 +1118,9 @@ class _FullPortfolioPageState extends State<FullPortfolioPage> {
   }
 
   Future<void> _fetchMore() async {
+    if (_isLoading) return;
+
     setState(() => _isLoading = true);
-    await Future.delayed(
-      const Duration(milliseconds: 500),
-    ); // simulate network delay
 
     final start = (_page - 1) * _limit;
     final end = start + _limit;
@@ -883,56 +1161,51 @@ class _FullPortfolioPageState extends State<FullPortfolioPage> {
           borderRadius: BorderRadius.circular(15),
           color: const Color(0xFFF5F9F6),
         ),
-        child: GridView.builder(
-          controller: _controller,
-          padding: const EdgeInsets.all(12),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 6,
-            mainAxisSpacing: 6,
-          ),
-          itemCount: loadedItems.length + (_hasMore ? 1 : 0),
-          itemBuilder: (context, index) {
-            if (index < loadedItems.length) {
-              final item = loadedItems[index];
-              final url = item['url'];
-              final type = item['type'];
-
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: type == 'video'
-                    ? Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Image.network(
-                            url,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                const Icon(Icons.videocam, color: Colors.grey),
-                          ),
-                          const Icon(
-                            Icons.play_circle_fill,
-                            color: Colors.white70,
-                            size: 28,
-                          ),
-                        ],
-                      )
-                    : Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            const Icon(Icons.broken_image, color: Colors.grey),
-                      ),
-              );
-            } else {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: CircularProgressIndicator(),
+        child: Column(
+          children: [
+            Expanded(
+              child: GridView.builder(
+                controller: _controller,
+                padding: const EdgeInsets.all(12),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6,
                 ),
-              );
-            }
-          },
+                itemCount: loadedItems.length,
+                itemBuilder: (context, index) {
+                  if (index < loadedItems.length) {
+                    final item = loadedItems[index];
+                    final url = item['url']?.toString() ?? '';
+                    final type = item['type']?.toString() ?? '';
+
+                    if (url.isEmpty) return const SizedBox.shrink();
+
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: type == 'video'
+                          ? VideoThumbnail(url: url)
+                          : Image.network(
+                              url,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.broken_image,
+                                color: Colors.grey,
+                              ),
+                            ),
+                    );
+                  }
+                },
+              ),
+            ),
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(
+                  child: CircularProgressIndicator(color: Color(0xFFFF7A33)),
+                ),
+              ),
+          ],
         ),
       ),
     );
