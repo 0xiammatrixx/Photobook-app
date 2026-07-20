@@ -5,6 +5,8 @@ import 'package:mobile_frontend/features/creative_dashboard/BookingsPage/booking
 import 'package:mobile_frontend/features/creative_dashboard/ChatPage/chatpage.dart';
 import 'package:mobile_frontend/features/creative_dashboard/HomePage/screen/homepage.dart';
 import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profilepage.dart';
+import 'package:mobile_frontend/providers/chat_provider.dart';
+import 'package:provider/provider.dart';
 
 class CreativeBottomTabs extends StatefulWidget {
   const CreativeBottomTabs({super.key});
@@ -78,19 +80,54 @@ class _CreativeBottomTabsState extends State<CreativeBottomTabs> {
             label: "Add",
           ),
           BottomNavigationBarItem(
-            icon: SvgPicture.asset(
-              'assets/chat_icon.svg',
-              width: 24,
-              height: 24,
-              color: Colors.black,
+            icon: Consumer<ChatProvider>(
+              builder: (context, chatProvider, _) {
+                final unread = chatProvider.totalUnread;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    SvgPicture.asset(
+                      'assets/chat_icon.svg',
+                      width: 24,
+                      height: 24,
+                      color: Colors.black,
+                    ),
+                    if (unread > 0)
+                      Positioned(
+                        top: -4,
+                        right: -6,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFF7A33),
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          child: Text(
+                            unread > 99 ? '99+' : '$unread',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
             activeIcon: SvgPicture.asset(
-              "assets/chat_icon.svg",
+              'assets/chat_icon.svg',
               width: 24,
               height: 24,
               color: Color(0xFFFF7A33),
             ),
-            label: "Chat",
+            label: 'Chat',
           ),
           BottomNavigationBarItem(
             icon: SvgPicture.asset(

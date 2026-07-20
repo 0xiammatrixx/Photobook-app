@@ -48,7 +48,9 @@ class _CreativeBookingsPageState extends State<CreativeBookingsPage> {
 
               if (provider.isLoading)
                 const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator(color: Color(0xFFFF7A33))),
+                  child: Center(
+                    child: CircularProgressIndicator(color: Color(0xFFFF7A33)),
+                  ),
                 )
               else if (provider.sessions.isEmpty)
                 const SliverFillRemaining(
@@ -76,7 +78,8 @@ class _CreativeBookingsPageState extends State<CreativeBookingsPage> {
                   ),
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
-                      (context, index) => _BookingCard(session: provider.upcoming[index]),
+                      (context, index) =>
+                          _BookingCard(session: provider.upcoming[index]),
                       childCount: provider.upcoming.length,
                     ),
                   ),
@@ -98,7 +101,8 @@ class _CreativeBookingsPageState extends State<CreativeBookingsPage> {
                   ),
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
-                      (context, index) => _BookingCard(session: provider.past[index]),
+                      (context, index) =>
+                          _BookingCard(session: provider.past[index]),
                       childCount: provider.past.length,
                     ),
                   ),
@@ -203,8 +207,11 @@ class _BookingCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today_outlined,
-                        size: 13, color: Colors.grey),
+                    const Icon(
+                      Icons.calendar_today_outlined,
+                      size: 13,
+                      color: Colors.grey,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       "$dateStr at $timeStr",
@@ -212,33 +219,41 @@ class _BookingCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (session.location != null && session.location!.isNotEmpty) ...[
+                if (session.location != null &&
+                    session.location!.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined,
-                          size: 13, color: Colors.grey),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 13,
+                        color: Colors.grey,
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           session.location!,
                           style: const TextStyle(
-                              fontSize: 12, color: Colors.grey),
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
                 ],
-                if (session.notes != null && session.notes!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+                const SizedBox(height: 6),
+                // The notes field holds event_type_name
+                if (session.notes != null && session.notes!.isNotEmpty)
                   Text(
                     session.notes!,
-                    style: const TextStyle(fontSize: 12, color: Colors.black54),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF047418),
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ],
                 const SizedBox(height: 6),
                 Text(
                   session.status.toUpperCase(),

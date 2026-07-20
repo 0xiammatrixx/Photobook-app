@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mobile_frontend/features/auth/roleSelection.dart';
+import 'package:mobile_frontend/providers/chat_provider.dart';
 import 'package:mobile_frontend/services/authservice.dart';
 import 'package:mobile_frontend/app/buttons.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
@@ -50,6 +51,10 @@ class _LoginFormState extends State<LoginForm> {
         context,
         listen: false,
       ).setUser(user, user['token']);
+      context.read<ChatProvider>().connectSocket(
+        user['token'],
+        user['id'], // ✅
+      );
 
       final role = user['role'] ?? 'client'; // default to client if null
       Widget nextPage;
@@ -81,6 +86,10 @@ class _LoginFormState extends State<LoginForm> {
         final user = data['user'];
         final token = data['token'];
         Provider.of<UserProvider>(context, listen: false).setUser(user, token);
+        context.read<ChatProvider>().connectSocket(
+          user['token'],
+          user['id'], // ✅
+        );
 
         final role = user['role']?.toString().toLowerCase();
         Widget nextPage;

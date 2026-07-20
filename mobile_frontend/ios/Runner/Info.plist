@@ -31,6 +31,10 @@
 	<string>PhotoBook</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>PhotoBook needs your location to show creatives near you</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>PhotoBook needs your location to show creatives near you</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>

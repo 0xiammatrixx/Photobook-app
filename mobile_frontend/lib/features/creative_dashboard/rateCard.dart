@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_frontend/features/shared/chat_conversation_screen.dart';
+import 'package:mobile_frontend/providers/chat_provider.dart';
 import 'package:mobile_frontend/providers/ratecard_provider.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/features/client_dashboard/BookScreen/book.dart';
@@ -88,6 +90,44 @@ class _RateCardPageState extends State<RateCardPage> {
       ).showSnackBar(SnackBar(content: Text("❌ Failed to add: $e")));
     }
   }
+
+  Future<void> _startConversation(
+  BuildContext context,
+  String creativeId,
+  String businessName,
+  String? avatarUrl,
+) async {
+  final token = context.read<UserProvider>().token;
+  if (token == null) return;
+
+  try {
+    final result = await context.read<ChatProvider>().createConversation(
+      token: token,
+      participantId: creativeId,
+    );
+
+    final conversationId = result['id'] ??
+        result['conversation']?['id'];
+
+    if (conversationId != null && context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatConversationScreen(
+            conversationId: conversationId,
+            title: businessName,
+            avatarUrl: avatarUrl,
+            isCreative: false,
+          ),
+        ),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to open chat: $e')),
+    );
+  }
+}
 
   Future<void> _editService(
     BuildContext context,
@@ -483,7 +523,13 @@ class _RateCardPageState extends State<RateCardPage> {
                                     ),
                                     padding: EdgeInsets.zero,
                                   ),
-                                  onPressed: () {},
+                                  // Replace the empty Message onPressed:
+                                  onPressed: () => _startConversation(
+                                    context,
+                                    widget.creativeId!,
+                                    widget.businessName,
+                                    widget.avatarUrl,
+                                  ),
                                   child: const Text(
                                     "Message",
                                     style: TextStyle(

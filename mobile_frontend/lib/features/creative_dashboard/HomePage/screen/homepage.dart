@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:mobile_frontend/app/count_up_effect.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/creative_dashboard/HomePage/model/booking_model.dart';
+import 'package:mobile_frontend/providers/sessions_provider.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/services/authservice.dart';
 import 'package:provider/provider.dart';
@@ -18,43 +19,16 @@ class CreativeHomePage extends StatefulWidget {
 class _CreativeHomePageState extends State<CreativeHomePage> {
   final AuthService _authService = AuthService();
 
-  void _confirmDelete(BuildContext context) {
-  showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text("Delete Account"),
-      content: const Text(
-        "Are you sure? This action is permanent and cannot be undone.",
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text("Cancel"),
-        ),
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: Colors.red),
-          onPressed: () async {
-            Navigator.pop(ctx); // close dialog
-            final success = await _authService.deleteAccount();
-            if (success && context.mounted) {
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginPage()),
-                (route) => false, // clears the entire nav stack
-              );
-            } else if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Failed to delete account. Try again.")),
-              );
-            }
-          },
-          child: const Text("Delete"),
-        ),
-      ],
-    ),
-  );
-}
-
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final token = context.read<UserProvider>().token;
+      if (token != null) {
+        context.read<SessionsProvider>().loadSessions(token: token);
+      }
+    });
+  }
 
   // Dummy Data
   final List<Booking> bookings = [
@@ -108,9 +82,26 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<UserProvider>(context).user;
+    final sessionsProvider = context.watch<SessionsProvider>();
 
     final firstName = user?['name']?.split(' ').first ?? "Guest";
     final businessName = user?['businessName'];
+
+    final upcomingSessions = sessionsProvider.upcoming
+      ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+    final nextSession = upcomingSessions.isNotEmpty
+        ? upcomingSessions.first
+        : null;
+
+    final bookedDates = sessionsProvider.sessions
+        .map(
+          (s) => DateTime(
+            s.scheduledAt.year,
+            s.scheduledAt.month,
+            s.scheduledAt.day,
+          ),
+        )
+        .toSet();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -120,7 +111,6 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              
               Text(
                 businessName != null && businessName.isNotEmpty
                     ? "Hello $firstName ($businessName),"
@@ -133,7 +123,7 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
               const SizedBox(height: 16),
 
               // Calendar
-              Card(color: Colors.white, child: buildCalendar()),
+              Card(color: Colors.white, child: buildCalendar(bookedDates)),
 
               const SizedBox(height: 20),
 
@@ -143,7 +133,17 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              buildUpcomingBookingCard(bookings.first),
+              if (sessionsProvider.isLoading)
+                const Center(
+                  child: CircularProgressIndicator(color: Color(0xFFFF7A33)),
+                )
+              else if (nextSession == null)
+                const Text(
+                  "No upcoming bookings",
+                  style: TextStyle(color: Colors.grey),
+                )
+              else
+                buildUpcomingBookingCard(nextSession),
 
               const SizedBox(height: 20),
 
@@ -212,7 +212,7 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
 
   CalendarFormat _calendarFormat = CalendarFormat.month;
 
-  Widget buildCalendar() {
+  Widget buildCalendar(Set<DateTime> bookedDates) {
     return TableCalendar(
       firstDay: DateTime.utc(2020, 1, 1),
       lastDay: DateTime.utc(2030, 12, 31),
@@ -254,16 +254,16 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
       ),
 
       calendarBuilders: CalendarBuilders(
-        // 🔶 Booked day pill (long horizontal)
         defaultBuilder: (context, day, focusedDay) {
-          final isBooked = bookings.any((b) => isSameDay(b.date, day));
+          final dayOnly = DateTime(day.year, day.month, day.day);
+          final isBooked = bookedDates.contains(dayOnly); // ✅ real data
           if (isBooked) {
             return Container(
               height: double.infinity,
               margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
               decoration: BoxDecoration(
                 color: const Color(0xFFFF7A33),
-                borderRadius: BorderRadius.circular(40), // pill shape
+                borderRadius: BorderRadius.circular(40),
               ),
               alignment: Alignment.center,
               child: Text(
@@ -277,9 +277,9 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
           }
           return null;
         },
-        // 🔸 Selected day only highlights border (so it doesn’t override booked/today)
         selectedBuilder: (context, day, focusedDay) {
-          final isBooked = bookings.any((b) => isSameDay(b.date, day));
+          final dayOnly = DateTime(day.year, day.month, day.day);
+          final isBooked = bookedDates.contains(dayOnly); // ✅ real data
           final isToday = isSameDay(day, DateTime.now());
 
           if (isBooked) {
@@ -349,31 +349,35 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
     );
   }
 
-  Widget buildUpcomingBookingCard(Booking booking) {
+  Widget buildUpcomingBookingCard(BookingSession session) {
+    // ✅ was Booking
+    final date = session.scheduledAt;
+    final timeStr =
+        "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
+
     return Card(
-      color: Color(0xFF615651).withOpacity(0.005),
+      color: Color.fromARGB(255, 213, 205, 201).withOpacity(0.005),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: Container(
         padding: const EdgeInsets.all(12.0),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start, // align to top
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Column 1: Avatar
             CircleAvatar(
-              radius: 24,
-              backgroundImage: const AssetImage("assets/tolu_avatar.png"),
+              backgroundColor: Colors.white,
+              radius: 20,
+              backgroundImage: session.clientAvatarUrl != null
+                  ? NetworkImage(session.clientAvatarUrl!) as ImageProvider
+                  : const AssetImage("assets/profileplaceholder.png",),
             ),
-    
             const SizedBox(width: 12),
-    
-            // Column 2: Name, Type+Date, Location
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    booking.name,
+                    session.clientName,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -381,41 +385,38 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    booking.type,
+                    session.notes ?? '',
                     style: const TextStyle(color: Color(0xFF181818)),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    DateFormat('d MMM yyyy').format(booking.date),
+                    DateFormat('d MMM yyyy').format(date),
                     style: const TextStyle(color: Color(0xFF181818)),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    booking.location,
+                    session.location ?? '',
                     style: const TextStyle(color: Color(0xFF181818)),
                   ),
                 ],
               ),
             ),
-    
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    booking.time,
+                    timeStr,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   TextButton(
-                    onPressed: () {
-                      // TODO: navigate to booking details
-                    },
+                    onPressed: () {},
                     style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero, // tighter look
+                      padding: EdgeInsets.zero,
                       minimumSize: const Size(0, 0),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),

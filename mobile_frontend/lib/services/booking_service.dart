@@ -34,7 +34,7 @@ class BookingService {
       final data = jsonDecode(response.body);
       print("📋 Event types: $data");
       if (data is List) return data;
-      return data['eventTypes'] ?? data['items'] ?? [];
+      return data['eventTypes'] ?? data['items'] ?? data['data'] ?? [];
     }
     throw Exception('Failed to load event types');
   }

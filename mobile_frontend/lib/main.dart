@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_frontend/providers/chat_provider.dart';
 import 'package:mobile_frontend/providers/search_provider.dart';
 import 'package:mobile_frontend/providers/sessions_provider.dart';
 import 'providers/booking_provider.dart';
@@ -47,6 +48,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => BookingProvider()),
         ChangeNotifierProvider(create: (_) => SessionsProvider()),
         ChangeNotifierProvider(create: (_) => SearchProvider()),
+        ChangeNotifierProvider(create: (_) => ChatProvider()),
       ],
       child: MyApp(
         initialUser: tokenValid ? userProvider.user : null,

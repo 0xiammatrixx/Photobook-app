@@ -45,23 +45,24 @@ class _BookingPageState extends State<BookingPage> {
   ];
 
   String _convertTo24Hour(String time12h) {
-  final parsed = TimeOfDayFormat.HH_colon_mm; // ignore this, just parse manually
+    final parsed =
+        TimeOfDayFormat.HH_colon_mm; // ignore this, just parse manually
 
-  final parts = time12h.split(' ');
-  final time = parts[0];
-  final modifier = parts[1];
+    final parts = time12h.split(' ');
+    final time = parts[0];
+    final modifier = parts[1];
 
-  int hour = int.parse(time.split(':')[0]);
-  final minute = time.split(':')[1];
+    int hour = int.parse(time.split(':')[0]);
+    final minute = time.split(':')[1];
 
-  if (modifier == 'PM' && hour != 12) {
-    hour += 12;
-  } else if (modifier == 'AM' && hour == 12) {
-    hour = 0;
+    if (modifier == 'PM' && hour != 12) {
+      hour += 12;
+    } else if (modifier == 'AM' && hour == 12) {
+      hour = 0;
+    }
+
+    return '${hour.toString().padLeft(2, '0')}:$minute';
   }
-
-  return '${hour.toString().padLeft(2, '0')}:$minute';
-}
 
   @override
   void initState() {
@@ -71,31 +72,34 @@ class _BookingPageState extends State<BookingPage> {
   }
 
   Future<void> _loadEventTypes() async {
-  final token = context.read<UserProvider>().token;
-  if (token == null) return;
-  try {
-    final response = await http.get(
-      Uri.parse('https://api.photobookhq.com/api/sessions/event-types'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    print("📋 Event types raw: ${response.statusCode} ${response.body}");
-    final data = jsonDecode(response.body);
-    final list = data is List ? data 
-        : data['eventTypes'] ?? data['items'] ?? data['data'] ?? [];
-    setState(() => eventTypes = List<Map<String, dynamic>>.from(list));
-    if (eventTypes.isEmpty) {
-  setState(() => eventTypes = [
-    {'id': 1, 'name': 'Wedding'},
-    {'id': 2, 'name': 'Birthday'},
-    {'id': 3, 'name': 'Corporate'},
-    {'id': 4, 'name': 'Portrait'},
-    {'id': 5, 'name': 'Product'},
-  ]);
-}
-  } catch (e) {
-    print("❌ Failed to load event types: $e");
+    final token = context.read<UserProvider>().token;
+    if (token == null) return;
+    try {
+      final response = await http.get(
+        Uri.parse('https://api.photobookhq.com/api/sessions/event-types'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      print("📋 Event types raw: ${response.statusCode} ${response.body}");
+      final data = jsonDecode(response.body);
+      final list = data is List
+          ? data
+          : data['eventTypes'] ?? data['items'] ?? data['data'] ?? [];
+      setState(() => eventTypes = List<Map<String, dynamic>>.from(list));
+      if (eventTypes.isEmpty) {
+        setState(
+          () => eventTypes = [
+            {'id': 1, 'name': 'Wedding'},
+            {'id': 2, 'name': 'Birthday'},
+            {'id': 3, 'name': 'Corporate'},
+            {'id': 4, 'name': 'Portrait'},
+            {'id': 5, 'name': 'Product'},
+          ],
+        );
+      }
+    } catch (e) {
+      print("❌ Failed to load event types: $e");
+    }
   }
-}
 
   Future<void> _submitBooking() async {
     final booking = context.read<BookingProvider>().booking;
@@ -112,15 +116,15 @@ class _BookingPageState extends State<BookingPage> {
       return;
     }
     final payload = {
-    "photographerId": widget.creativeId,
-    "eventTypeId": booking.eventTypeId,
-    "packageType": booking.package?.toLowerCase() ?? 'regular',
-    "sessionDate":
-        "${booking.date!.year}-${booking.date!.month.toString().padLeft(2, '0')}-${booking.date!.day.toString().padLeft(2, '0')}",
-    "sessionTime": _convertTo24Hour(booking.time!),
-    "locationType": booking.locationType!.toLowerCase().replaceAll(' ', '_'),
-    "locationText": booking.location!,
-  };
+      "photographerId": widget.creativeId,
+      "eventTypeId": booking.eventTypeId,
+      "packageType": booking.package?.toLowerCase() ?? 'regular',
+      "sessionDate":
+          "${booking.date!.year}-${booking.date!.month.toString().padLeft(2, '0')}-${booking.date!.day.toString().padLeft(2, '0')}",
+      "sessionTime": _convertTo24Hour(booking.time!),
+      "locationType": booking.locationType!.toLowerCase().replaceAll(' ', '_'),
+      "locationText": booking.location!,
+    };
     print("🚀 Booking payload: $payload");
     setState(() => _submitting = true);
     try {
@@ -134,9 +138,8 @@ class _BookingPageState extends State<BookingPage> {
         sessionTime: _convertTo24Hour(booking.time!),
         locationType: booking.locationType!.toLowerCase().replaceAll(' ', '_'),
         locationText: booking.location!,
-        
       );
-        
+
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("✅ Booking request sent!")),
@@ -240,18 +243,21 @@ class _BookingPageState extends State<BookingPage> {
               title: "Event Type",
               value: booking.eventType,
               items: eventTypes
-                  .map((e) => e['name']?.toString() ?? '')
+                  .map(
+                    (e) => e['display_name']?.toString() ?? '',
+                  ) // ✅ was 'name'
+                  .where((e) => e.isNotEmpty)
                   .toList(),
               onChange: (v) {
                 final match = eventTypes.firstWhere(
-                  (e) => e['name'] == v,
+                  (e) => e['display_name'] == v,
                   orElse: () => {},
                 );
                 final provider = context.read<BookingProvider>();
                 provider.setEventType(v ?? "");
                 provider.setEventTypeId(
                   match['id'] as int?,
-                ); // ✅ store the id for submission
+                ); // ✅ id is already an int
               },
             ),
 
@@ -325,7 +331,7 @@ class _BookingPageState extends State<BookingPage> {
             _dropdown(
               title: "Location",
               value: booking.location,
-              items: ["Lekki", "Ikeja", "Yaba", "VI", "Ajah"],
+              items: ["Lekki", "Ikeja", "YabaPoly", "Victoria Island", "Abuja"],
               onChange: (v) =>
                   context.read<BookingProvider>().setLocation(v ?? ""),
             ),
@@ -450,11 +456,11 @@ class _BookingPageState extends State<BookingPage> {
           ),
         ),
         calendarFormat: _calendarFormat,
-      onFormatChanged: (format) {
-        setState(() {
-          _calendarFormat = format;
-        });
-      },
+        onFormatChanged: (format) {
+          setState(() {
+            _calendarFormat = format;
+          });
+        },
         onDaySelected: (selected, _) {
           context.read<BookingProvider>().setDate(selected);
           setState(() => showCalendar = false);
