@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_frontend/features/client_dashboard/BookScreen/book.dart';
 import 'package:mobile_frontend/features/shared/chat_conversation_screen.dart';
 import 'package:mobile_frontend/providers/chat_provider.dart';
 import 'package:mobile_frontend/providers/ratecard_provider.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
-import 'package:mobile_frontend/features/client_dashboard/BookScreen/book.dart';
-import 'package:mobile_frontend/features/creative_dashboard/BookingsPage/bookingspage.dart';
-import 'package:mobile_frontend/services/profileservice.dart';
 import 'package:provider/provider.dart';
 
 class RateCardPage extends StatefulWidget {
@@ -15,11 +13,25 @@ class RateCardPage extends StatefulWidget {
   final List<dynamic> rateCard;
   final double? rating;
   final String? creativeId;
+  final String description;
+  final List<String>? categories;
+  final List<String>? whatsIncluded;
+  final String deliveryTime;
+  final int? quantityMax;
+  final String currencyCode;
+  final int sortOrder;
 
   const RateCardPage({
     Key? key,
     required this.isOwner,
     required this.businessName,
+    this.description = '',
+    this.categories,
+    this.whatsIncluded,
+    this.deliveryTime = '',
+    this.quantityMax, 
+    this.currencyCode = 'NGN', 
+    this.sortOrder = 0, 
     this.rating = 0,
     this.creativeId,
     this.avatarUrl,
@@ -31,6 +43,8 @@ class RateCardPage extends StatefulWidget {
 }
 
 class _RateCardPageState extends State<RateCardPage> {
+  int? _expandedIndex;
+
   @override
   void initState() {
     super.initState();
@@ -43,219 +57,377 @@ class _RateCardPageState extends State<RateCardPage> {
     await context.read<RateCardProvider>().loadMyRateCard(token: token);
   }
 
-  bool addingNew = false;
-  final TextEditingController _serviceCtrl = TextEditingController();
-  final TextEditingController _qtyCtrl = TextEditingController();
-  final TextEditingController _priceCtrl = TextEditingController();
-
-  Future<void> _addService() async {
-    final service = _serviceCtrl.text.trim();
-    final qty = _qtyCtrl.text.trim();
-    final price = _priceCtrl.text.trim();
-
-    if (service.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in at least Service')),
-      );
-      return;
-    }
-
+  Future<void> _startConversation(BuildContext context) async {
+    final token = context.read<UserProvider>().token;
+    if (token == null || widget.creativeId == null) return;
     try {
-      final token = context.read<UserProvider>().token!;
-      final success = await context.read<RateCardProvider>().addItem(
+      final result = await context.read<ChatProvider>().createConversation(
         token: token,
-        item: RateCardItem(
-          id: '',
-          serviceName: service,
-          quantityLabel: qty,
-          pricingMode: price.isEmpty ? 'contact' : 'fixed',
-          pricingAmount: price.isEmpty ? null : double.tryParse(price),
-        ),
+        participantId: widget.creativeId!,
       );
-
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Service added successfully")),
+      final conversationId = result['id'] ?? result['conversation']?['id'];
+      if (conversationId != null && context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatConversationScreen(
+              conversationId: conversationId,
+              title: widget.businessName,
+              avatarUrl: widget.avatarUrl,
+              isCreative: false, 
+              recipientId: widget.creativeId!,
+            ),
+          ),
         );
-        setState(() {
-          addingNew = false;
-          _serviceCtrl.clear();
-          _qtyCtrl.clear();
-          _priceCtrl.clear();
-        });
       }
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("❌ Failed to add: $e")));
+      ).showSnackBar(SnackBar(content: Text('Failed to open chat: $e')));
     }
   }
 
-  Future<void> _startConversation(
-  BuildContext context,
-  String creativeId,
-  String businessName,
-  String? avatarUrl,
-) async {
-  final token = context.read<UserProvider>().token;
-  if (token == null) return;
-
-  try {
-    final result = await context.read<ChatProvider>().createConversation(
-      token: token,
-      participantId: creativeId,
-    );
-
-    final conversationId = result['id'] ??
-        result['conversation']?['id'];
-
-    if (conversationId != null && context.mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ChatConversationScreen(
-            conversationId: conversationId,
-            title: businessName,
-            avatarUrl: avatarUrl,
-            isCreative: false,
-          ),
-        ),
-      );
+  IconData _iconFor(int index) {
+    switch (index) {
+      case 0:
+        return Icons.camera_alt_outlined;
+      case 1:
+        return Icons.star_border;
+      default:
+        return Icons.diamond_outlined;
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to open chat: $e')),
-    );
   }
-}
 
-  Future<void> _editService(
-    BuildContext context,
-    int index,
-    RateCardItem item,
-  ) async {
-    final serviceCtrl = TextEditingController(text: item.serviceName);
-    final qtyCtrl = TextEditingController(text: item.quantityLabel);
-    final priceCtrl = TextEditingController(
-      text: item.pricingAmount?.toStringAsFixed(0) ?? '',
-    );
+  Color _iconColorFor(int index) {
+    switch (index) {
+      case 0:
+        return const Color(0xFF4CAF50);
+      case 1:
+        return const Color(0xFF2196F3);
+      default:
+        return const Color(0xFF9C27B0);
+    }
+  }
 
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+  String _formatPrice(double? amount) {
+    if (amount == null) return 'Contact';
+    if (amount >= 1000000) return '${(amount / 1000000).toStringAsFixed(1)}M';
+    if (amount >= 1000) return '${(amount / 1000).toStringAsFixed(0)}k';
+    return amount.toStringAsFixed(0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final services = List.of(context.watch<RateCardProvider>().services)
+      ..sort((a, b) {
+        final priceA = a.pricingAmount ?? double.infinity;
+        final priceB = b.pricingAmount ?? double.infinity;
+        return priceA.compareTo(priceB);
+      });
+
+    final rating = widget.rating ?? 0;
+    final avatarUrl = widget.avatarUrl;
+
+    final categories = services.expand((e) => e.categories).toSet().toList();
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
         backgroundColor: Colors.white,
-        title: const Text('Edit Service'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: serviceCtrl,
-              cursorColor: Colors.black,
-              decoration: InputDecoration(
-                labelText: 'Service',
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Color(0xFFFF7A33)),
-                ),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
-                ),
-              ),
+        elevation: 0,
+        leading: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              shape: BoxShape.circle,
             ),
-            TextField(
-              controller: qtyCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Qty',
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Color(0xFFFF7A33)),
-                ),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
-                ),
-              ),
-            ),
-            TextField(
-              controller: priceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Price',
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Color(0xFFFF7A33)),
-                ),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            style: ButtonStyle(
-              foregroundColor: MaterialStateProperty.all<Color>(Colors.black),
-            ),
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Icon(Icons.arrow_back, size: 20, color: Colors.black),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFF047418),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+        ),
+        title: Text(
+          widget.isOwner
+              ? 'My Rate Card'
+              : "${widget.businessName}${widget.businessName.endsWith('s') ? "'" : "'s"} Rate Card",
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Profile card ──
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: avatarUrl != null
+                      ? Image.network(
+                          avatarUrl,
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _placeholder(),
+                        )
+                      : _placeholder(),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            widget.businessName,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.verified,
+                            color: Color(0xFFFF7A33),
+                            size: 16,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          ...List.generate(
+                            5,
+                            (i) => Icon(
+                              i < rating.round()
+                                  ? Icons.star
+                                  : Icons.star_border,
+                              color: Colors.orange,
+                              size: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            rating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      // Categories chips (hardcoded sample)
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: categories.map((c) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(c),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: const [
+                          Icon(
+                            Icons.camera_alt_outlined,
+                            size: 12,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            '243 shoots completed',
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                          SizedBox(width: 8),
+                          Text('|', style: TextStyle(color: Colors.grey)),
+                          SizedBox(width: 8),
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 12,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Based in Abuja',
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            onPressed: () async {
-              final token = context.read<UserProvider>().token!;
-              final price = priceCtrl.text.trim();
 
-              final updatedItem = RateCardItem(
-                id: item.id,
-                serviceName: serviceCtrl.text.trim(),
-                quantityLabel: qtyCtrl.text.trim(),
-                pricingMode: price.isEmpty ? 'contact' : 'fixed',
-                pricingAmount: price.isEmpty ? null : double.tryParse(price),
-                currencyCode: item.currencyCode,
-                sortOrder: item.sortOrder,
-              );
-
-              final success = await context.read<RateCardProvider>().editItem(
-                token: token,
-                itemId: item.id,
-                item: updatedItem,
-              );
-
-              if (mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      success ? "✅ Service updated" : "❌ Update failed",
+            // Client actions (not owner)
+            if (!widget.isOwner) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF7A33),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BookingPage(
+                            creativeId: widget.creativeId!,
+                            name: widget.businessName,
+                            avatarUrl: widget.avatarUrl ?? '',
+                            rating: rating,
+                          ),
+                        ),
+                      ),
+                      child: const Text(
+                        'Book Now',
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF047418)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () => _startConversation(context),
+                      child: const Text(
+                        'Message',
+                        style: TextStyle(color: Colors.black, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            const SizedBox(height: 24),
+
+            // ── Empty state ──
+            if (services.isEmpty && widget.isOwner)
+              _EmptyState(onAdd: () => _showAddPackageSheet(context)),
+
+            if (services.isEmpty && !widget.isOwner)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Text(
+                    'This creative hasn\'t added any packages yet.\nChat with them to discuss pricing.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                ),
+              ),
+
+            // ── Package list ──
+            if (services.isNotEmpty) ...[
+              ...List.generate(services.length, (index) {
+                final item = services[index];
+                final isExpanded = _expandedIndex == index;
+                final inclusions = item.whatsIncluded;
+                final delivery = item.deliveryTime;
+
+                return _PackageCard(
+                  index: index,
+                  item: item,
+                  isExpanded: isExpanded,
+                  inclusions: inclusions,
+                  deliveryTime: delivery,
+                  icon: _iconFor(index),
+                  iconColor: _iconColorFor(index),
+                  priceLabel: _formatPrice(item.pricingAmount),
+                  isOwner: widget.isOwner,
+                  onTap: () => setState(
+                    () => _expandedIndex = isExpanded ? null : index,
+                  ),
+                  onEdit: () => _showAddPackageSheet(
+                    context,
+                    existing: item,
+                    index: index,
+                  ),
+                  onDelete: () => _deletePackage(context, index),
                 );
-              }
-            },
-            child: const Text('Save', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+              }),
+
+              // Add another package (owner only)
+              if (widget.isOwner)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFFF7A33)),
+                        foregroundColor: const Color(0xFFFF7A33),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () => _showAddPackageSheet(context),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text(
+                        'Add Package',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+
+            const SizedBox(height: 32),
+          ],
+        ),
       ),
     );
   }
 
-  Future<void> _deleteService(BuildContext context, int index) async {
+  Widget _placeholder() => Container(
+    width: 80,
+    height: 80,
+    decoration: BoxDecoration(
+      color: Colors.grey.shade200,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: const Icon(Icons.person, color: Colors.grey, size: 40),
+  );
+
+  Future<void> _deletePackage(BuildContext context, int index) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         backgroundColor: Colors.white,
-        title: const Text('Delete Service'),
-        content: const Text('Are you sure you want to delete this service?'),
+        title: const Text('Delete Package'),
+        content: const Text('Are you sure you want to delete this package?'),
         actions: [
           TextButton(
-            style: ButtonStyle(
-              foregroundColor: MaterialStateProperty.all<Color>(Colors.black),
-            ),
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: Colors.black)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -270,668 +442,697 @@ class _RateCardPageState extends State<RateCardPage> {
         ],
       ),
     );
-
-    if (confirm == true) {
+    if (confirm == true && mounted) {
       final token = context.read<UserProvider>().token!;
       final item = context.read<RateCardProvider>().services[index];
       await context.read<RateCardProvider>().deleteItem(
         token: token,
         itemId: item.id,
       );
+      setState(() {
+        if (_expandedIndex == index) _expandedIndex = null;
+      });
     }
   }
 
-  Widget _buildHeaderCell(String title, String tooltip) {
-    final iconKey = GlobalKey();
-
-    return Expanded(
-      flex: title == "Service" ? 4 : (title == "Qty" ? 2 : 3),
-      child: Row(
-        mainAxisAlignment: title == "Pricing"
-            ? MainAxisAlignment.end
-            : (title == "Qty"
-                  ? MainAxisAlignment.center
-                  : MainAxisAlignment.start),
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            key: iconKey,
-            onTap: () {
-              final renderBox =
-                  iconKey.currentContext?.findRenderObject() as RenderBox?;
-              final overlay =
-                  Overlay.of(context).context.findRenderObject() as RenderBox?;
-              if (renderBox == null || overlay == null) return;
-
-              final screenWidth = MediaQuery.of(context).size.width;
-              final target = renderBox.localToGlobal(
-                Offset.zero,
-                ancestor: overlay,
-              );
-              const tooltipWidth = 220.0;
-              double left = target.dx - 40;
-              double top = target.dy - 45;
-
-              // 🧠 Keep tooltip within screen bounds
-              if (left < 8) left = 8;
-              if (left + tooltipWidth > screenWidth - 8) {
-                left = screenWidth - tooltipWidth - 8;
-              }
-
-              final entry = OverlayEntry(
-                builder: (context) => Positioned(
-                  left: left,
-                  top: top,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: AnimatedOpacity(
-                      opacity: 1,
-                      duration: const Duration(milliseconds: 150),
-                      child: Container(
-                        width: tooltipWidth,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.black87,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black26,
-                              blurRadius: 6,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          tooltip,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+  void _showAddPackageSheet(
+    BuildContext context, {
+    RateCardItem? existing,
+    int? index,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _AddPackageSheet(
+        existing: existing,
+        onSave: (item) async {
+          final token = context.read<UserProvider>().token!;
+          bool success;
+          if (existing != null && existing.id.isNotEmpty) {
+            success = await context.read<RateCardProvider>().editItem(
+              token: token,
+              itemId: existing.id,
+              item: item,
+            );
+          } else {
+            success = await context.read<RateCardProvider>().addItem(
+              token: token,
+              item: item,
+            );
+          }
+          if (success && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  existing != null ? '✅ Package updated' : '✅ Package added',
                 ),
-              );
-
-              Overlay.of(context).insert(entry);
-              Future.delayed(
-                const Duration(seconds: 2),
-              ).then((_) => entry.remove());
-            },
-            child: const Icon(Icons.info_outline, size: 16, color: Colors.grey),
-          ),
-        ],
+              ),
+            );
+          }
+        },
       ),
     );
   }
+}
+
+// ── Package Card ──────────────────────────────────────────────────────────────
+
+class _PackageCard extends StatelessWidget {
+  final int index;
+  final RateCardItem item;
+  final bool isExpanded;
+  final List<String> inclusions;
+  final String deliveryTime;
+  final IconData icon;
+  final Color iconColor;
+  final String priceLabel;
+  final bool isOwner;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _PackageCard({
+    required this.index,
+    required this.item,
+    required this.isExpanded,
+    required this.inclusions,
+    required this.deliveryTime,
+    required this.icon,
+    required this.iconColor,
+    required this.priceLabel,
+    required this.isOwner,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final services = List.of(context.watch<RateCardProvider>().services)
-      ..sort((a, b) {
-        if (a.pricingMode == 'contact') return 1;
-        if (b.pricingMode == 'contact') return -1;
-        final double priceA = a.pricingAmount ?? double.infinity;
-        final double priceB = b.pricingAmount ?? double.infinity;
-        return priceA.compareTo(priceB);
-      });
-
-    final imageWidget = widget.avatarUrl != null
-        ? ClipRRect(
-            borderRadius: BorderRadius.circular(15),
-            child: Image.network(
-              widget.avatarUrl!,
-              width: 117,
-              height: 103,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Image.asset(
-                "assets/profileplaceholder.png",
-                width: 117,
-                height: 103,
-              ),
-            ),
-          )
-        : Image.asset("assets/profileplaceholder.png", width: 117, height: 103);
-
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: widget.isOwner
-            ? Text(
-                'My Rate Card',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              )
-            : Text(
-                "${widget.businessName}${widget.businessName.endsWith('s') ? "'" : "'s"} Rate Card",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.close, color: Colors.black),
-            onPressed: () => Navigator.pop(context),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
-        backgroundColor: Colors.white,
-        elevation: 0,
       ),
-      body: SingleChildScrollView(
-        physics: ClampingScrollPhysics(),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Photographer Info
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(15),
-                  color: const Color(0xFFF5F9F6),
-                ),
-                padding: const EdgeInsets.only(
-                  right: 16,
-                  left: 16,
-                  bottom: 16,
-                  top: 16,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    imageWidget,
-                    const SizedBox(height: 20),
-                    Row(
+      child: Column(
+        children: [
+          // ── Header row ──
+          InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: iconColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: iconColor, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.businessName,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Row(
-                                children: List.generate(
-                                  5,
-                                  (index) => Icon(
-                                    Icons.star,
-                                    color: Colors.orange,
-                                    size: 18,
-                                  ),
-                                ),
-                              ),
-                            ],
+                        Text(
+                          item.serviceName,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        if (!widget.isOwner)
-                          Column(
-                            children: [
-                              SizedBox(
-                                height: 31,
-                                width: 83,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                    backgroundColor: const Color(0xFFFF7A33),
-                                  ),
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => BookingPage(
-                                          creativeId: widget.creativeId!,
-                                          name: widget.businessName,
-                                          avatarUrl: widget.avatarUrl ?? '',
-                                          rating: widget.rating ?? 0,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  child: const Text(
-                                    "Book Now",
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(height: 5),
-                              SizedBox(
-                                height: 31,
-                                width: 83,
-                                child: OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    backgroundColor: Colors.white,
-                                    side: BorderSide(color: Color(0xFF047418)),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    padding: EdgeInsets.zero,
-                                  ),
-                                  // Replace the empty Message onPressed:
-                                  onPressed: () => _startConversation(
-                                    context,
-                                    widget.creativeId!,
-                                    widget.businessName,
-                                    widget.avatarUrl,
-                                  ),
-                                  child: const Text(
-                                    "Message",
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                        const SizedBox(height: 2),
+                        Text(
+                          item.quantityLabel.isNotEmpty
+                              ? item.quantityLabel
+                              : item.description.isNotEmpty
+                              ? item.description
+                              : item.quantityLabel,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
                           ),
+                        ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 30),
-
-              // 🧾 Rate Card Table Container
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F9F6),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                height:
-                    MediaQuery.of(context).size.height *
-                    0.55, // keeps nice layout height
-                child: Column(
-                  children: [
-                    // 🔹 Header Row (fixed)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 8.0,
-                        horizontal: 4.0,
-                      ),
-                      child: widget.isOwner
-                          ? Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                _buildHeaderCell(
-                                  "Service",
-                                  "What service do you offer?",
-                                ),
-                                _buildHeaderCell(
-                                  "Qty",
-                                  "What is the maximum amount of people this service is limited to?",
-                                ),
-                                _buildHeaderCell(
-                                  "Pricing",
-                                  "Your price or rate for the service.",
-                                ),
-                              ],
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                _buildHeaderCell(
-                                  "Service",
-                                  "The service being offered",
-                                ),
-                                _buildHeaderCell(
-                                  "Qty",
-                                  "The maximum amount of people this service is limited to",
-                                ),
-                                _buildHeaderCell(
-                                  "Pricing",
-                                  "The price or rate for the service",
-                                ),
-                              ],
-                            ),
+                  ),
+                  Text(
+                    item.pricingMode == 'contact' ? 'Contact' : priceLabel,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: Colors.grey,
+                  ),
+                ],
+              ),
+            ),
+          ),
 
-                    const Divider(thickness: 1.2),
-
-                    if (services.isEmpty)
-                      SizedBox(
-                        height: MediaQuery.of(context).size.height * 0.22,
+          // ── Expanded content ──
+          if (isExpanded) ...[
+            Divider(height: 1, color: Colors.grey.shade200),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "What's Included",
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  ...inclusions.map(
+                    (inc) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle,
+                            color: Color(0xFF047418),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(inc, style: const TextStyle(fontSize: 13)),
+                        ],
                       ),
-                    // 🔹 Scrollable list of services
-                    services.isEmpty && widget.isOwner
-                        ? Center(
-                            child: SizedBox(
-                              width: MediaQuery.of(context).size.width * 0.7,
-                              child: Text(
-                                'No service has been added, add services below!',
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          )
-                        : (services.isEmpty && !widget.isOwner
-                              ? Center(
-                                  child: SizedBox(
-                                    width:
-                                        MediaQuery.of(context).size.width * 0.7,
-                                    child: Text(
-                                      textAlign: TextAlign.center,
-                                      'Looks like this creative has not added any services yet. You can chat with them privately!',
-                                    ),
-                                  ),
-                                )
-                              : Expanded(
-                                  child: ListView.builder(
-                                    itemCount: services.length,
-                                    itemBuilder: (context, index) {
-                                      final item = services[index];
-                                      return Container(
-                                        margin: const EdgeInsets.symmetric(
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                          color: Color(0xFFF5F9F6),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              flex: 4,
-                                              child: Text(
-                                                item.serviceName,
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                                maxLines: 3,
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                item.quantityLabel,
-                                                textAlign: TextAlign.center,
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 3,
-                                              child: Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.end,
-                                                children: [
-                                                  Flexible(
-                                                    child: Text(
-                                                      item.pricingMode ==
-                                                              'contact'
-                                                          ? "Contact Creative"
-                                                          : item.pricingAmount
-                                                                    ?.toStringAsFixed(
-                                                                      0,
-                                                                    ) ??
-                                                                '',
-                                                      textAlign:
-                                                          TextAlign.right,
-                                                      style: TextStyle(
-                                                        fontSize: 14,
-                                                        color:
-                                                            item.pricingMode ==
-                                                                'contact'
-                                                            ? const Color(
-                                                                0xFF047418,
-                                                              )
-                                                            : Colors.black,
-                                                        decoration:
-                                                            item.pricingMode ==
-                                                                'contact'
-                                                            ? TextDecoration
-                                                                  .underline
-                                                            : TextDecoration
-                                                                  .none,
-                                                      ),
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                  if (widget
-                                                      .isOwner) // 👈 Only show for owner
-                                                    PopupMenuButton<String>(
-                                                      color: Colors.white,
-                                                      icon: const Icon(
-                                                        Icons.more_vert,
-                                                        size: 18,
-                                                        color: Colors.black54,
-                                                      ),
-                                                      onSelected: (value) {
-                                                        // In the PopupMenuButton onSelected:
-                                                        if (value == 'edit') {
-                                                          _editService(
-                                                            context,
-                                                            index,
-                                                            item,
-                                                          );
-                                                        } else if (value ==
-                                                            'delete') {
-                                                          _deleteService(
-                                                            context,
-                                                            index,
-                                                          );
-                                                        }
-                                                      },
-                                                      itemBuilder: (context) => [
-                                                        const PopupMenuItem(
-                                                          value: 'edit',
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                Icons.edit,
-                                                                size: 18,
-                                                                color: Colors
-                                                                    .black54,
-                                                              ),
-                                                              SizedBox(
-                                                                width: 8,
-                                                              ),
-                                                              Text('Edit'),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        const PopupMenuItem(
-                                                          value: 'delete',
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                Icons.delete,
-                                                                size: 18,
-                                                                color: Colors
-                                                                    .redAccent,
-                                                              ),
-                                                              SizedBox(
-                                                                width: 8,
-                                                              ),
-                                                              Text('Delete'),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                )),
-
-                    // 🔹 Add Service Section (fixed bottom)
-                    if (widget.isOwner) ...[
-                      const SizedBox(height: 8),
-                      if (!addingNew)
-                        GestureDetector(
-                          onTap: () => setState(() => addingNew = true),
-                          child: const Padding(
-                            padding: EdgeInsets.only(top: 8),
-                            child: Text(
-                              "Add Service",
-                              style: TextStyle(
-                                decoration: TextDecoration.underline,
-                                color: Color(0xFF047418),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Divider(color: Colors.grey.shade200),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.access_time_outlined,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 6),
+                      if (item.deliveryTime.isNotEmpty)
+                        Text(
+                          'Delivery Time - $deliveryTime',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey,
                           ),
                         ),
-                      if (addingNew) ...[
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              "Add a new service",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            GestureDetector(
-                              onTap: () => setState(() => addingNew = false),
-                              child: const Icon(
-                                Icons.close,
-                                color: Colors.black,
-                                size: 20,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 4,
-                              child: TextField(
-                                controller: _serviceCtrl,
-                                cursorColor: Colors.black,
-                                cursorRadius: Radius.zero,
-                                decoration: const InputDecoration(
-                                  labelText: "Service",
-                                  labelStyle: TextStyle(color: Colors.black),
-                                  border: OutlineInputBorder(
-                                    borderSide: BorderSide(
-                                      color: Color(0xFFE0E0E0),
-                                    ),
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(8),
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderSide: BorderSide(
-                                      color: Color(0xFFFF7A33),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              flex: 2,
-                              child: TextField(
-                                controller: _qtyCtrl,
-                                cursorColor: Colors.black,
-                                cursorRadius: Radius.zero,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  labelText: "Qty (Optional)",
-                                  labelStyle: TextStyle(color: Colors.black),
-                                  border: OutlineInputBorder(
-                                    borderSide: BorderSide(
-                                      color: Color(0xFFE0E0E0),
-                                    ),
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(8),
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderSide: BorderSide(
-                                      color: Color(0xFFFF7A33),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              flex: 3,
-                              child: TextField(
-                                controller: _priceCtrl,
-                                cursorColor: Colors.black,
-                                cursorRadius: Radius.zero,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  labelText: "Price (optional)",
-                                  labelStyle: TextStyle(color: Colors.black),
-                                  border: OutlineInputBorder(
-                                    borderSide: BorderSide(
-                                      color: Color(0xFFE0E0E0),
-                                    ),
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(8),
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderSide: BorderSide(
-                                      color: Color(0xFFFF7A33),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: ElevatedButton(
-                            onPressed: _addService,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF047418),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 10,
-                              ),
+                    ],
+                  ),
+                  if (isOwner) ...[
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
                             ),
+                            onPressed: onDelete,
+                            child: const Text('Delete'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFFF7A33),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            onPressed: onEdit,
                             child: const Text(
-                              "Add",
+                              'Edit',
                               style: TextStyle(color: Colors.white),
                             ),
                           ),
                         ),
                       ],
-                    ],
+                    ),
                   ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Empty State ───────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  final VoidCallback onAdd;
+  const _EmptyState({required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Column(
+          children: [
+            const Text(
+              "Let's set you up :)",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Create your first package to start receiving\nbookings from clients.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF7A33),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-            ],
-          ),
+              onPressed: onAdd,
+              child: const Text(
+                'Add First Package',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+// ── Add/Edit Package Sheet ────────────────────────────────────────────────────
+
+class _AddPackageSheet extends StatefulWidget {
+  final RateCardItem? existing;
+  final Function(RateCardItem) onSave;
+
+  const _AddPackageSheet({this.existing, required this.onSave});
+
+  @override
+  State<_AddPackageSheet> createState() => _AddPackageSheetState();
+}
+
+class _AddPackageSheetState extends State<_AddPackageSheet> {
+  final _nameCtrl = TextEditingController();
+  final _priceCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _itemCtrl = TextEditingController();
+  final _quantityCtrl = TextEditingController(); // ✅ missing
+  final _quantityMaxCtrl = TextEditingController(); // ✅ missing
+  final _deliveryCtrl = TextEditingController(); // ✅ missing
+  String? _selectedCategory;
+  String _pricingMode = 'fixed';
+  List<String> _inclusions = [];
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.existing != null) {
+      _nameCtrl.text = widget.existing!.serviceName;
+      _priceCtrl.text =
+          widget.existing!.pricingAmount?.toStringAsFixed(0) ?? '';
+      _descCtrl.text = widget.existing!.description;
+      _quantityCtrl.text = widget.existing!.quantityLabel;
+      _quantityMaxCtrl.text = widget.existing!.quantityMax?.toString() ?? '';
+      _deliveryCtrl.text = widget.existing!.deliveryTime;
+      _inclusions = List.from(widget.existing!.whatsIncluded);
+      _pricingMode = widget.existing!.pricingMode;
+      _selectedCategory = widget.existing!.categories.isNotEmpty
+          ? widget.existing!.categories.first
+          : null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _priceCtrl.dispose();
+    _descCtrl.dispose();
+    _itemCtrl.dispose();
+    _quantityCtrl.dispose(); // ✅
+    _quantityMaxCtrl.dispose(); // ✅
+    _deliveryCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_nameCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Package name is required')));
+      return;
+    }
+    setState(() => _loading = true);
+    final item = RateCardItem(
+      id: widget.existing?.id ?? '',
+
+      serviceName: _nameCtrl.text,
+
+      pricingAmount: double.tryParse(_priceCtrl.text),
+
+      pricingMode: _pricingMode,
+
+      quantityLabel: _quantityCtrl.text,
+
+      quantityMax: int.tryParse(_quantityMaxCtrl.text),
+
+      currencyCode: "NGN",
+
+      sortOrder: widget.existing?.sortOrder ?? 1,
+
+      categories: [
+        if (_selectedCategory != null) _selectedCategory!.toLowerCase(),
+      ],
+
+      description: _descCtrl.text,
+
+      whatsIncluded: _inclusions,
+
+      deliveryTime: _deliveryCtrl.text,
+    );
+    await widget.onSave(item);
+    setState(() => _loading = false);
+    if (mounted) Navigator.pop(context);
+  }
+
+  final List<String> _kCategories = [
+    'Wedding',
+    'Birthday',
+    'Corporate',
+    'Portrait',
+    'Fashion',
+    'Product',
+    'Events',
+    'Editorial',
+    'Headshots',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.arrow_back, size: 18),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Add a Rate Card',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Create packages and pricing to let clients easily book or request your services',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+
+            _label('Package Name'),
+            _field(_nameCtrl, hint: 'e.g Basic Package'),
+            const SizedBox(height: 16),
+
+            _label('Category'),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedCategory,
+                  isExpanded: true,
+                  hint: const Text(
+                    'Select a category',
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ),
+                  items: _kCategories
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
+                  onChanged: (v) => setState(() => _selectedCategory = v),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            _label('Price (₦)'),
+            _field(
+              _priceCtrl,
+              hint: 'Enter amount',
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 16),
+
+            _label('Description'),
+            TextField(
+              controller: _descCtrl,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Briefly describe what this package is best for...',
+                hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFFF7A33)),
+                ),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Row(
+              children: [
+                const Text(
+                  "What's Included",
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '(Add key deliverables in this package)',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Add item input
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFFF7A33)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 12),
+                  const Text(
+                    '+ ',
+                    style: TextStyle(
+                      color: Color(0xFFFF7A33),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _itemCtrl,
+                      decoration: const InputDecoration(
+                        hintText: 'Add Item',
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      onSubmitted: (v) {
+                        if (v.trim().isNotEmpty) {
+                          setState(() {
+                            _inclusions.add(v.trim());
+                            _itemCtrl.clear();
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Inclusion chips
+            ..._inclusions.map(
+              (inc) => Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade200),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(inc, style: const TextStyle(fontSize: 13)),
+                    GestureDetector(
+                      onTap: () => setState(() => _inclusions.remove(inc)),
+                      child: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF7A33),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: _loading ? null : _save,
+                child: _loading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Text(
+                        widget.existing != null
+                            ? 'Save Changes'
+                            : 'Add First Package',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _label(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    ),
+  );
+
+  Widget _field(
+    TextEditingController ctrl, {
+    String? hint,
+    TextInputType? keyboardType,
+  }) => TextField(
+    controller: ctrl,
+    keyboardType: keyboardType,
+    decoration: InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFFF7A33)),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+    ),
+  );
 }

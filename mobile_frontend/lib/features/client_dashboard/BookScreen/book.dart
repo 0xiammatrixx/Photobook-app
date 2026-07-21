@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_frontend/providers/booking_provider.dart';
@@ -45,8 +44,6 @@ class _BookingPageState extends State<BookingPage> {
   ];
 
   String _convertTo24Hour(String time12h) {
-    final parsed =
-        TimeOfDayFormat.HH_colon_mm; // ignore this, just parse manually
 
     final parts = time12h.split(' ');
     final time = parts[0];

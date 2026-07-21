@@ -213,10 +213,14 @@ class ProfilePortfolioService {
     required String serviceName,
     required String quantityLabel,
     int? quantityMax,
-    required String pricingMode, // "fixed" or "contact"
+    required String pricingMode,
     double? pricingAmount,
     String currencyCode = "NGN",
     int? sortOrder,
+    String? description, // ✅ add
+    List<String>? categories, // ✅ add
+    List<String>? whatsIncluded, // ✅ add
+    String? deliveryTime, // ✅ add
   }) async {
     final body = <String, dynamic>{
       "serviceName": serviceName,
@@ -226,6 +230,10 @@ class ProfilePortfolioService {
       if (pricingAmount != null) "pricingAmount": pricingAmount,
       "currencyCode": currencyCode,
       if (sortOrder != null) "sortOrder": sortOrder,
+      if (description != null) "description": description, // ✅
+      if (categories != null) "categories": categories, // ✅
+      if (whatsIncluded != null) "whatsIncluded": whatsIncluded, // ✅
+      if (deliveryTime != null) "deliveryTime": deliveryTime, // ✅
     };
 
     final response = await http.post(
@@ -286,6 +294,10 @@ class ProfilePortfolioService {
     double? pricingAmount,
     String? currencyCode,
     int? sortOrder,
+    String? description, // ✅ add
+    List<String>? categories, // ✅ add
+    List<String>? whatsIncluded, // ✅ add
+    String? deliveryTime, // ✅ add
   }) async {
     final body = <String, dynamic>{
       if (serviceName != null) "serviceName": serviceName,
@@ -295,6 +307,10 @@ class ProfilePortfolioService {
       if (pricingAmount != null) "pricingAmount": pricingAmount,
       if (currencyCode != null) "currencyCode": currencyCode,
       if (sortOrder != null) "sortOrder": sortOrder,
+      if (description != null) "description": description, // ✅
+      if (categories != null) "categories": categories, // ✅
+      if (whatsIncluded != null) "whatsIncluded": whatsIncluded, // ✅
+      if (deliveryTime != null) "deliveryTime": deliveryTime, // ✅
     };
 
     final response = await http.patch(

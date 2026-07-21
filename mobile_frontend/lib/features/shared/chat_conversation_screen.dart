@@ -1,38 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_frontend/features/shared/offer_bubble.dart';
+import 'package:mobile_frontend/features/shared/offer_message_payload.dart';
+import 'package:mobile_frontend/features/shared/send_custom_offer_screen.dart';
 import 'package:mobile_frontend/providers/chat_provider.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/services/profileservice.dart';
 import 'package:provider/provider.dart';
-
+ 
 class ChatConversationScreen extends StatefulWidget {
   final String conversationId;
   final String title;
   final String? avatarUrl;
   final bool isCreative;
-
+  final String recipientId;
+ 
   const ChatConversationScreen({
     super.key,
     required this.conversationId,
     required this.title,
+    required this.recipientId,
     this.avatarUrl,
     this.isCreative = false,
   });
-
+ 
   @override
   State<ChatConversationScreen> createState() => _ChatConversationScreenState();
 }
-
+ 
 class _ChatConversationScreenState extends State<ChatConversationScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   bool _showActions = false;
   late ChatProvider _chatProvider; // ✅ save reference
-
+ 
+  // In-memory only for now — see caveat in the offer-details write-up.
+  final Set<String> _declinedOfferIds = {};
+ 
   @override
   void initState() {
     super.initState();
     _chatProvider = context.read<ChatProvider>(); // ✅ capture here
-
+ 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final token = context.read<UserProvider>().token ?? '';
       _chatProvider.loadMessages(token, widget.conversationId).then((_) {
@@ -45,7 +53,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         });
       });
     });
-
+ 
     _scrollController.addListener(() {
       if (_scrollController.position.pixels <= 100) {
         final token = context.read<UserProvider>().token ?? '';
@@ -53,7 +61,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       }
     });
   }
-
+ 
   @override
   void dispose() {
     _chatProvider.leaveConversation(widget.conversationId); // ✅ no context
@@ -61,7 +69,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     _scrollController.dispose();
     super.dispose();
   }
-
+ 
   void _sendMessage() {
     final content = _controller.text.trim();
     if (content.isEmpty) return;
@@ -74,7 +82,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     );
     _scrollToBottom();
   }
-
+ 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -86,7 +94,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       }
     });
   }
-
+ 
   Future<void> _sendRateCard() async {
     final token = context.read<UserProvider>().token ?? '';
     try {
@@ -97,7 +105,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         );
         return;
       }
-
+ 
       // Format rate card as a readable message
       final lines = items
           .map((item) {
@@ -108,7 +116,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
             return '• $name — $price';
           })
           .join('\n');
-
+ 
       final content = '📋 *My Rate Card*\n$lines';
       context.read<ChatProvider>().sendMessage(
         token: token,
@@ -122,12 +130,28 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       ).showSnackBar(SnackBar(content: Text('Failed to send rate card: $e')));
     }
   }
-
+ 
+  void _openSendCustomOffer() {
+    final token = context.read<UserProvider>().token ?? '';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SendCustomOfferScreen(
+          token: token,
+          conversationId: widget.conversationId,
+          recipientId: widget.recipientId,
+          recipientName: widget.title,
+        ),
+      ),
+    );
+    setState(() => _showActions = false);
+  }
+ 
   @override
   Widget build(BuildContext context) {
     final myId = context.read<UserProvider>().user?['id'] ?? '';
-    print("👤 My ID: $myId");
-
+    final token = context.read<UserProvider>().token ?? '';
+ 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -178,11 +202,11 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                 final messages = chatProvider.getMessages(
                   widget.conversationId,
                 );
-
+ 
                 if (messages.isEmpty) {
                   return const SizedBox.shrink(); // silent empty
                 }
-
+ 
                 return ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.all(16),
@@ -190,13 +214,22 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                   itemBuilder: (context, index) {
                     final msg = messages[index];
                     final isMe = msg['senderId'] == myId;
-                    return _MessageBubble(message: msg, isMe: isMe);
+                    return _MessageBubble(
+                      message: msg,
+                      isMe: isMe,
+                      token: token,
+                      counterpartyName: widget.title,
+                      counterpartyAvatarUrl: widget.avatarUrl,
+                      declinedOfferIds: _declinedOfferIds,
+                      onOfferDeclined: (id) =>
+                          setState(() => _declinedOfferIds.add(id)),
+                    );
                   },
                 );
               },
             ),
           ),
-
+ 
           // Creative action panel
           if (_showActions && widget.isCreative)
             Container(
@@ -218,18 +251,13 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                       icon: '✉️',
                       label: 'Send Custom Offer',
                       subtitle: 'Send the negotiated price',
-                      onTap: () {
-                        // TODO: when backend supports offers
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon')),
-                        );
-                      },
+                      onTap: _openSendCustomOffer,
                     ),
                   ),
                 ],
               ),
             ),
-
+ 
           // Input bar
           SafeArea(
             top: false,
@@ -292,20 +320,35 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     );
   }
 }
-
+ 
 class _MessageBubble extends StatelessWidget {
   final Map<String, dynamic> message;
   final bool isMe;
-
-  const _MessageBubble({required this.message, required this.isMe});
-
+  final String token;
+  final String counterpartyName;
+  final String? counterpartyAvatarUrl;
+  final Set<String> declinedOfferIds;
+  final void Function(String offerId) onOfferDeclined;
+ 
+  const _MessageBubble({
+    required this.message,
+    required this.isMe,
+    required this.token,
+    required this.counterpartyName,
+    required this.declinedOfferIds,
+    required this.onOfferDeclined,
+    this.counterpartyAvatarUrl,
+  });
+ 
   @override
   Widget build(BuildContext context) {
     final content = message['content'] ?? '';
     final createdAt = message['createdAt'] ?? '';
-
+ 
     final isRateCard = content.startsWith('📋 *My Rate Card*');
-
+    final offerPayload = OfferMessagePayload.tryParse(content);
+    final isSpecialBubble = isRateCard || offerPayload != null;
+ 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -313,11 +356,11 @@ class _MessageBubble extends StatelessWidget {
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.72,
         ),
-        padding: isRateCard
+        padding: isSpecialBubble
             ? const EdgeInsets.all(12)
             : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isRateCard
+          color: isSpecialBubble
               ? const Color(0xFFF5F9F6)
               : isMe
               ? const Color(0xFFE8F5E9)
@@ -328,29 +371,38 @@ class _MessageBubble extends StatelessWidget {
             bottomLeft: Radius.circular(isMe ? 16 : 4),
             bottomRight: Radius.circular(isMe ? 4 : 16),
           ),
-          border: isRateCard
+          border: isSpecialBubble
               ? Border.all(color: const Color(0xFF047418), width: 0.8)
               : null,
         ),
-        child: isRateCard
-            ? _RateCardBubble(content: content)
-            : Column(
-                crossAxisAlignment: isMe
-                    ? CrossAxisAlignment.end
-                    : CrossAxisAlignment.start,
-                children: [
-                  Text(content, style: const TextStyle(fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatTime(createdAt),
-                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+        child: offerPayload != null
+            ? OfferBubble(
+                payload: offerPayload,
+                isDeclined: declinedOfferIds.contains(offerPayload.offerId),
+                token: token,
+                counterpartyName: counterpartyName,
+                counterpartyAvatarUrl: counterpartyAvatarUrl,
+                onDeclined: onOfferDeclined,
+              )
+            : isRateCard
+                ? _RateCardBubble(content: content)
+                : Column(
+                    crossAxisAlignment: isMe
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                    children: [
+                      Text(content, style: const TextStyle(fontSize: 13)),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatTime(createdAt),
+                        style: const TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
+                    ],
                   ),
-                ],
-              ),
       ),
     );
   }
-
+ 
   String _formatTime(String iso) {
     if (iso.isEmpty) return '';
     try {
@@ -361,16 +413,16 @@ class _MessageBubble extends StatelessWidget {
     }
   }
 }
-
+ 
 class _RateCardBubble extends StatelessWidget {
   final String content;
   const _RateCardBubble({required this.content});
-
+ 
   @override
   Widget build(BuildContext context) {
     final lines = content.split('\n');
     final items = lines.skip(1).toList();
-
+ 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -397,20 +449,20 @@ class _RateCardBubble extends StatelessWidget {
     );
   }
 }
-
+ 
 class _ActionButton extends StatelessWidget {
   final String icon;
   final String label;
   final String subtitle;
   final VoidCallback onTap;
-
+ 
   const _ActionButton({
     required this.icon,
     required this.label,
     required this.subtitle,
     required this.onTap,
   });
-
+ 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -442,3 +494,4 @@ class _ActionButton extends StatelessWidget {
     );
   }
 }
+ 

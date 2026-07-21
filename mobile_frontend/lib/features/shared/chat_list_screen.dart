@@ -281,7 +281,7 @@ class _ConversationTile extends StatelessWidget {
             title: title, // ✅ now correctly derived
             avatarUrl: avatarUrl, // ✅ now correctly derived
             isCreative:
-                context.read<UserProvider>().user?['role'] == 'photographer',
+                context.read<UserProvider>().user?['role'] == 'photographer', recipientId: other['id'] ?? '',
           ),
         ),
       ),

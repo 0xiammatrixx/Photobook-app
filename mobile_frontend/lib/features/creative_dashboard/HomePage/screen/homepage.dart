@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_frontend/app/count_up_effect.dart';
-import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/creative_dashboard/HomePage/model/booking_model.dart';
 import 'package:mobile_frontend/providers/sessions_provider.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';

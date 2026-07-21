@@ -6,10 +6,15 @@ class RateCardItem {
   final String serviceName;
   final String quantityLabel;
   final int? quantityMax;
-  final String pricingMode; // "fixed" or "contact"
+  final String pricingMode;
   final double? pricingAmount;
   final String currencyCode;
   final int? sortOrder;
+
+  final String description;
+  final List<String> categories;
+  final List<String> whatsIncluded;
+  final String deliveryTime;
 
   RateCardItem({
     required this.id,
@@ -20,6 +25,11 @@ class RateCardItem {
     this.pricingAmount,
     this.currencyCode = "NGN",
     this.sortOrder,
+
+    this.description = "",
+    this.categories = const [],
+    this.whatsIncluded = const [],
+    this.deliveryTime = "",
   });
 
   factory RateCardItem.fromJson(Map<String, dynamic> json) {
@@ -34,6 +44,11 @@ class RateCardItem {
       ),
       currencyCode: json['currency_code'] ?? json['currencyCode'] ?? 'NGN',
       sortOrder: json['sort_order'] ?? json['sortOrder'],
+
+      description: json["description"] ?? "",
+      categories: List<String>.from(json["categories"] ?? []),
+      whatsIncluded: List<String>.from(json["whatsIncluded"] ?? []),
+      deliveryTime: json["deliveryTime"] ?? "",
     );
   }
 }
@@ -60,6 +75,7 @@ class RateCardProvider extends ChangeNotifier {
     }
   }
 
+
   Future<bool> addItem({
     required String token,
     required RateCardItem item,
@@ -73,26 +89,38 @@ class RateCardProvider extends ChangeNotifier {
       pricingAmount: item.pricingAmount,
       currencyCode: item.currencyCode,
       sortOrder: item.sortOrder,
+      description: item.description,
+      categories: item.categories,
+      whatsIncluded: item.whatsIncluded,
+      deliveryTime: item.deliveryTime,
     );
     if (success) await loadMyRateCard(token: token);
     return success;
   }
 
-  Future<bool> editItem({required String token, required String itemId, required RateCardItem item}) async {
-  final success = await _service.updateRateCardItem(
-    token: token,
-    itemId: itemId,
-    serviceName: item.serviceName,
-    quantityLabel: item.quantityLabel,
-    quantityMax: item.quantityMax,
-    pricingMode: item.pricingMode,
-    pricingAmount: item.pricingAmount,
-    currencyCode: item.currencyCode,
-    sortOrder: item.sortOrder,
-  );
-  if (success) await loadMyRateCard(token: token);
-  return success;
-}
+  Future<bool> editItem({
+    required String token,
+    required String itemId,
+    required RateCardItem item,
+  }) async {
+    final success = await _service.updateRateCardItem(
+      token: token,
+      itemId: itemId,
+      serviceName: item.serviceName,
+      quantityLabel: item.quantityLabel,
+      quantityMax: item.quantityMax,
+      pricingMode: item.pricingMode,
+      pricingAmount: item.pricingAmount,
+      currencyCode: item.currencyCode,
+      sortOrder: item.sortOrder,
+      description: item.description,
+      categories: item.categories,
+      whatsIncluded: item.whatsIncluded,
+      deliveryTime: item.deliveryTime,
+    );
+    if (success) await loadMyRateCard(token: token);
+    return success;
+  }
 
   Future<bool> deleteItem({
     required String token,

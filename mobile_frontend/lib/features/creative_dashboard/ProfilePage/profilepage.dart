@@ -431,6 +431,7 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
         final businessName = profile?['basic']?['businessName'] ?? 'Unknown'; 
         Navigator.push(context, MaterialPageRoute(builder: (_) => ChatConversationScreen(
           conversationId: conversationId,
+          recipientId: widget.creativeId!,
           title: businessName,
           avatarUrl: avatarUrl,
           isCreative: false,
