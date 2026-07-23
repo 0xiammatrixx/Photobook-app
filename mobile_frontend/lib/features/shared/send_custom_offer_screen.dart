@@ -18,13 +18,29 @@ class SendCustomOfferScreen extends StatefulWidget {
   final String recipientId;
   final String recipientName;
 
+  // Edit-mode: when set, this screen pre-fills from an existing offer and,
+  // on submit, cancels that offer before creating the replacement (there's
+  // no PATCH-to-edit endpoint, so "editing" = cancel old + send new).
+  final String? editingOfferId;
+  final num? initialPrice;
+  final List<String>? initialWhatsIncluded;
+  final String? initialNote;
+  final String? initialValidFor;
+
   const SendCustomOfferScreen({
     super.key,
     required this.token,
     required this.conversationId,
     required this.recipientId,
     required this.recipientName,
+    this.editingOfferId,
+    this.initialPrice,
+    this.initialWhatsIncluded,
+    this.initialNote,
+    this.initialValidFor,
   });
+
+  bool get isEditing => editingOfferId != null;
 
   @override
   State<SendCustomOfferScreen> createState() => _SendCustomOfferScreenState();
@@ -58,6 +74,23 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
         return now.add(const Duration(days: 7));
     }
     return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isEditing) {
+      if (widget.initialPrice != null) {
+        _priceController.text = widget.initialPrice!.toStringAsFixed(0);
+      }
+      if (widget.initialWhatsIncluded != null) {
+        _whatsIncluded.addAll(widget.initialWhatsIncluded!);
+      }
+      if (widget.initialNote != null) {
+        _noteController.text = widget.initialNote!;
+      }
+      _validFor = widget.initialValidFor;
+    }
   }
 
   @override
@@ -101,6 +134,21 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
 
     setState(() => _sending = true);
     try {
+      if (widget.isEditing) {
+        try {
+          await OfferService().cancelOffer(
+            token: widget.token,
+            id: widget.editingOfferId!,
+          );
+        } catch (e) {
+          // Best-effort — if the old offer can't be cancelled (already
+          // accepted/declined/expired, etc.) we still want to let the
+          // creative send the corrected offer rather than block them.
+          // ignore: avoid_print
+          print('Could not cancel offer ${widget.editingOfferId} while editing: $e');
+        }
+      }
+
       final offer = await OfferService().createOffer(
         token: widget.token,
         sentTo: widget.recipientId,
@@ -155,6 +203,12 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
             validFor: _validFor,
           ),
         ),
+        // Completes the Future that whoever pushed *this* screen is
+        // awaiting (e.g. OfferBubble's "Edit Offer" flow) — lets the
+        // original bubble know which old offer id got superseded.
+        result: widget.isEditing
+            ? {'editedOfferId': widget.editingOfferId}
+            : null,
       );
     } catch (e) {
       _showSnack('$e');
@@ -181,9 +235,9 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
           ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Send Custom Offer',
-          style: TextStyle(
+        title: Text(
+          widget.isEditing ? 'Edit Custom Offer' : 'Send Custom Offer',
+          style: const TextStyle(
             color: Colors.black,
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -301,9 +355,9 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
                             strokeWidth: 2,
                           ),
                         )
-                      : const Text(
-                          'Send Offer',
-                          style: TextStyle(
+                      : Text(
+                          widget.isEditing ? 'Update Offer' : 'Send Offer',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                             fontSize: 15,

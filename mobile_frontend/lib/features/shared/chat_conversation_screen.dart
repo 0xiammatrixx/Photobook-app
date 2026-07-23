@@ -35,6 +35,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
  
   // In-memory only for now — see caveat in the offer-details write-up.
   final Set<String> _declinedOfferIds = {};
+  final Set<String> _supersededOfferIds = {};
  
   @override
   void initState() {
@@ -218,11 +219,16 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                       message: msg,
                       isMe: isMe,
                       token: token,
+                      conversationId: widget.conversationId,
+                      recipientId: widget.recipientId,
                       counterpartyName: widget.title,
                       counterpartyAvatarUrl: widget.avatarUrl,
                       declinedOfferIds: _declinedOfferIds,
+                      supersededOfferIds: _supersededOfferIds,
                       onOfferDeclined: (id) =>
                           setState(() => _declinedOfferIds.add(id)),
+                      onOfferEdited: (id) =>
+                          setState(() => _supersededOfferIds.add(id)),
                     );
                   },
                 );
@@ -325,18 +331,26 @@ class _MessageBubble extends StatelessWidget {
   final Map<String, dynamic> message;
   final bool isMe;
   final String token;
+  final String conversationId;
+  final String recipientId;
   final String counterpartyName;
   final String? counterpartyAvatarUrl;
   final Set<String> declinedOfferIds;
+  final Set<String> supersededOfferIds;
   final void Function(String offerId) onOfferDeclined;
- 
+  final void Function(String offerId) onOfferEdited;
+
   const _MessageBubble({
     required this.message,
     required this.isMe,
     required this.token,
+    required this.conversationId,
+    required this.recipientId,
     required this.counterpartyName,
     required this.declinedOfferIds,
+    required this.supersededOfferIds,
     required this.onOfferDeclined,
+    required this.onOfferEdited,
     this.counterpartyAvatarUrl,
   });
  
@@ -378,11 +392,16 @@ class _MessageBubble extends StatelessWidget {
         child: offerPayload != null
             ? OfferBubble(
                 payload: offerPayload,
+                isMe: isMe,
                 isDeclined: declinedOfferIds.contains(offerPayload.offerId),
+                isSuperseded: supersededOfferIds.contains(offerPayload.offerId),
                 token: token,
+                conversationId: conversationId,
+                recipientId: recipientId,
                 counterpartyName: counterpartyName,
                 counterpartyAvatarUrl: counterpartyAvatarUrl,
                 onDeclined: onOfferDeclined,
+                onEdited: onOfferEdited,
               )
             : isRateCard
                 ? _RateCardBubble(content: content)
@@ -494,4 +513,3 @@ class _ActionButton extends StatelessWidget {
     );
   }
 }
- 
