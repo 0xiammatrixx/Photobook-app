@@ -7,11 +7,18 @@ import 'package:mobile_frontend/features/shared/offer.dart';
 /// below only append "/offers...", not "/api/offers...".
 const String _baseUrl = 'https://api.photobookhq.com/api';
 
+String _isoUtc(DateTime dt) {
+  final iso = dt.toUtc().toIso8601String();
+  final dotIndex = iso.indexOf('.');
+  if (dotIndex == -1) return iso.endsWith('Z') ? iso : '${iso}Z';
+  return '${iso.substring(0, dotIndex)}Z';
+}
+
 class OfferService {
   Map<String, String> _headers(String token) => {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      };
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer $token',
+  };
 
   /// POST /api/offers
   Future<Offer> createOffer({
@@ -31,6 +38,7 @@ class OfferService {
     String? sessionTime,
     String? locationType,
     String? locationText,
+    DateTime? expiresAt,
   }) async {
     final body = {
       'sentTo': sentTo,
@@ -49,6 +57,12 @@ class OfferService {
       if (sessionTime != null) 'sessionTime': sessionTime,
       if (locationType != null) 'locationType': locationType,
       if (locationText != null) 'locationText': locationText,
+      // The response includes an `expires_at` field, so the backend
+      // supports it — but the exact request key it expects isn't
+      // documented. "expiresAt" matches the camelCase convention of every
+      // other field here; if the server ignores it, expires_at will just
+      // keep coming back null and this is the first thing to check.
+      if (expiresAt != null) 'expiresAt': _isoUtc(expiresAt),
     };
 
     final res = await http.post(
@@ -97,6 +111,7 @@ class OfferService {
     required String token,
     required String id,
   }) async {
+    _requireId(id);
     final res = await http.patch(
       Uri.parse('$_baseUrl/offers/$id/accept'),
       headers: _headers(token),
@@ -108,10 +123,8 @@ class OfferService {
   }
 
   /// PATCH /api/offers/{id}/decline
-  Future<void> declineOffer({
-    required String token,
-    required String id,
-  }) async {
+  Future<void> declineOffer({required String token, required String id}) async {
+    _requireId(id);
     final res = await http.patch(
       Uri.parse('$_baseUrl/offers/$id/decline'),
       headers: _headers(token),
@@ -122,16 +135,24 @@ class OfferService {
   }
 
   /// PATCH /api/offers/{id}/cancel
-  Future<void> cancelOffer({
-    required String token,
-    required String id,
-  }) async {
+  Future<void> cancelOffer({required String token, required String id}) async {
+    _requireId(id);
     final res = await http.patch(
       Uri.parse('$_baseUrl/offers/$id/cancel'),
       headers: _headers(token),
     );
     if (res.statusCode != 200) {
       throw Exception(_extractError(res, 'Failed to cancel offer'));
+    }
+  }
+
+  void _requireId(String id) {
+    if (id.trim().isEmpty) {
+      throw Exception(
+        'This offer has no id — it looks like it wasn\'t parsed '
+        'correctly when it was created. Check the "Offer.fromJson: no id '
+        'field found" print from when the offer was sent.',
+      );
     }
   }
 

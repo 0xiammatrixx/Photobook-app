@@ -70,8 +70,8 @@ class OfferBubble extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   payload.formattedPrice +
-                      (payload.validFor != null
-                          ? ' · Valid for ${payload.validFor}'
+                      (payload.remainingLabel() != null
+                          ? ' · ${payload.remainingLabel()}'
                           : ''),
                   style: TextStyle(
                     fontSize: 12,

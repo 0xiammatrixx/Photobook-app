@@ -12,7 +12,8 @@ class OfferMessagePayload {
   final String currencyCode;
   final String pricingMode; // 'fixed' | 'contact'
   final List<String> whatsIncluded;
-  final String? validFor; // e.g. "48hrs" — display only, see note in service
+  final DateTime? expiresAt; // drives the live countdown
+  final String? validFor; // legacy label, kept for messages sent before expiresAt existed
   final String? note;
 
   OfferMessagePayload({
@@ -21,6 +22,7 @@ class OfferMessagePayload {
     required this.currencyCode,
     required this.pricingMode,
     required this.whatsIncluded,
+    this.expiresAt,
     this.validFor,
     this.note,
   });
@@ -31,6 +33,7 @@ class OfferMessagePayload {
         'currencyCode': currencyCode,
         'pricingMode': pricingMode,
         'whatsIncluded': whatsIncluded,
+        if (expiresAt != null) 'expiresAt': expiresAt!.toIso8601String(),
         if (validFor != null) 'validFor': validFor,
         if (note != null) 'note': note,
       };
@@ -49,6 +52,9 @@ class OfferMessagePayload {
         currencyCode: data['currencyCode'] ?? 'NGN',
         pricingMode: data['pricingMode'] ?? 'fixed',
         whatsIncluded: List<String>.from(data['whatsIncluded'] ?? const []),
+        expiresAt: data['expiresAt'] != null
+            ? DateTime.tryParse(data['expiresAt'])
+            : null,
         validFor: data['validFor'],
         note: data['note'],
       );
@@ -56,6 +62,28 @@ class OfferMessagePayload {
       return null;
     }
   }
+
+  /// Human-readable remaining time, e.g. "2d 3h left" / "45m left" /
+  /// "Expired". Falls back to the legacy [validFor] label if there's no
+  /// [expiresAt] on this payload (older messages).
+  String? remainingLabel({DateTime? now}) {
+    if (expiresAt == null) {
+      return validFor == null ? null : 'Valid for $validFor';
+    }
+    final n = now ?? DateTime.now();
+    final diff = expiresAt!.difference(n);
+    if (diff.isNegative) return 'Expired';
+    if (diff.inDays >= 1) {
+      return '${diff.inDays}d ${diff.inHours % 24}h left';
+    }
+    if (diff.inHours >= 1) {
+      return '${diff.inHours}h ${diff.inMinutes % 60}m left';
+    }
+    return '${diff.inMinutes}m left';
+  }
+
+  bool get isExpired =>
+      expiresAt != null && expiresAt!.isBefore(DateTime.now());
 
   String get formattedPrice {
     if (pricingMode == 'contact') return 'Contact for price';

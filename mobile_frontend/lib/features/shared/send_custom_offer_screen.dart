@@ -44,6 +44,22 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
 
   static const _validForOptions = ['24hrs', '48hrs', '72hrs', '1 week'];
 
+  DateTime? get _computedExpiresAt {
+    if (_validFor == null) return null;
+    final now = DateTime.now();
+    switch (_validFor) {
+      case '24hrs':
+        return now.add(const Duration(hours: 24));
+      case '48hrs':
+        return now.add(const Duration(hours: 48));
+      case '72hrs':
+        return now.add(const Duration(hours: 72));
+      case '1 week':
+        return now.add(const Duration(days: 7));
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _priceController.dispose();
@@ -78,16 +94,10 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
       return;
     }
 
-    // "Valid For" isn't part of the /api/offers schema yet (no expiry
-    // field on the Offer resource). Until the backend adds one, we fold
-    // it into the note so the client still sees it.
+    // "Valid For" is sent as a real expiresAt now that we know the API
+    // returns (and, per this request, accepts) that field.
+    final expiresAt = _computedExpiresAt;
     final note = _noteController.text.trim();
-    final combinedNote = _validFor == null
-        ? note
-        : [
-            note,
-            'This offer is valid for $_validFor.',
-          ].where((s) => s.isNotEmpty).join(' ');
 
     setState(() => _sending = true);
     try {
@@ -100,11 +110,12 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
         pricingAmount: price,
         pricingMode: 'fixed',
         currencyCode: 'NGN',
-        description: combinedNote.isEmpty ? null : combinedNote,
+        description: note.isEmpty ? null : note,
         whatsIncluded: _whatsIncluded,
         locationText: _locationTextController.text.trim().isEmpty
             ? null
             : _locationTextController.text.trim(),
+        expiresAt: expiresAt,
       );
 
       // Drop the offer into the chat as its own bubble, the same way
@@ -112,13 +123,16 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
       // (what the user actually typed) rather than offer.pricingAmount —
       // if the backend's create-offer response is ever wrapped or shaped
       // differently than expected, this keeps the bubble showing the
-      // right number regardless.
+      // right number regardless. Prefer offer.expiresAt (what the server
+      // actually stored) over our local computation, falling back to the
+      // local one if the server didn't echo it back.
       final messagePayload = OfferMessagePayload(
         offerId: offer.id,
         price: price,
         currencyCode: 'NGN',
         pricingMode: 'fixed',
         whatsIncluded: _whatsIncluded,
+        expiresAt: offer.expiresAt ?? expiresAt,
         validFor: _validFor,
         note: note.isEmpty ? null : note,
       );

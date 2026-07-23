@@ -18,6 +18,7 @@ class Offer {
   final String? sessionTime;
   final String? locationType; // "indoor" | "outdoor" etc
   final String? locationText;
+  final DateTime? expiresAt;
   final DateTime createdAt;
   final DateTime updatedAt;
   final Map<String, dynamic>? counterparty;
@@ -43,6 +44,7 @@ class Offer {
     this.sessionTime,
     this.locationType,
     this.locationText,
+    this.expiresAt,
     required this.createdAt,
     required this.updatedAt,
     this.counterparty,
@@ -50,13 +52,18 @@ class Offer {
   });
 
   factory Offer.fromJson(Map<String, dynamic> json) {
+    final id = json['id'] ?? json['_id'] ?? json['offerId'] ?? '';
+    if (id == '') {
+      // ignore: avoid_print
+      print('Offer.fromJson: no id field found in: $json');
+    }
     return Offer(
-      id: json['id'] ?? '',
-      createdBy: json['created_by'] ?? '',
-      sentTo: json['sent_to'] ?? '',
+      id: id,
+      createdBy: json['created_by'] ?? json['createdBy'] ?? '',
+      sentTo: json['sent_to'] ?? json['sentTo'] ?? '',
       serviceName: json['service_name'] ?? '',
       description: json['description'],
-      pricingAmount: json['pricing_amount'] ?? 0,
+      pricingAmount: _parseNum(json['pricing_amount']),
       currencyCode: json['currency_code'] ?? 'NGN',
       pricingMode: json['pricing_mode'] ?? 'fixed',
       categories: List<String>.from(json['categories'] ?? const []),
@@ -70,6 +77,9 @@ class Offer {
       sessionTime: json['session_time'],
       locationType: json['location_type'],
       locationText: json['location_text'],
+      expiresAt: json['expires_at'] != null
+          ? DateTime.tryParse(json['expires_at'])
+          : null,
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
       counterparty: json['counterparty'] is Map<String, dynamic>
@@ -91,4 +101,13 @@ class Offer {
     }
     return '₦$buf';
   }
+}
+
+/// The API sometimes returns pricing_amount as a decimal string
+/// (e.g. "500000.00") instead of a JSON number — handle both.
+num _parseNum(dynamic value) {
+  if (value == null) return 0;
+  if (value is num) return value;
+  if (value is String) return num.tryParse(value) ?? 0;
+  return 0;
 }

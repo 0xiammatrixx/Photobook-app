@@ -1,0 +1,415 @@
+diff --git a/mobile_frontend/lib/features/shared/offer.dart b/mobile_frontend/lib/features/shared/offer.dart
+index 4a48cb4..947a4be 100644
+--- a/mobile_frontend/lib/features/shared/offer.dart
++++ b/mobile_frontend/lib/features/shared/offer.dart
+@@ -18,6 +18,7 @@ class Offer {
+   final String? sessionTime;
+   final String? locationType; // "indoor" | "outdoor" etc
+   final String? locationText;
++  final DateTime? expiresAt;
+   final DateTime createdAt;
+   final DateTime updatedAt;
+   final Map<String, dynamic>? counterparty;
+@@ -43,6 +44,7 @@ class Offer {
+     this.sessionTime,
+     this.locationType,
+     this.locationText,
++    this.expiresAt,
+     required this.createdAt,
+     required this.updatedAt,
+     this.counterparty,
+@@ -50,13 +52,18 @@ class Offer {
+   });
+ 
+   factory Offer.fromJson(Map<String, dynamic> json) {
++    final id = json['id'] ?? json['_id'] ?? json['offerId'] ?? '';
++    if (id == '') {
++      // ignore: avoid_print
++      print('Offer.fromJson: no id field found in: $json');
++    }
+     return Offer(
+-      id: json['id'] ?? '',
+-      createdBy: json['created_by'] ?? '',
+-      sentTo: json['sent_to'] ?? '',
++      id: id,
++      createdBy: json['created_by'] ?? json['createdBy'] ?? '',
++      sentTo: json['sent_to'] ?? json['sentTo'] ?? '',
+       serviceName: json['service_name'] ?? '',
+       description: json['description'],
+-      pricingAmount: json['pricing_amount'] ?? 0,
++      pricingAmount: _parseNum(json['pricing_amount']),
+       currencyCode: json['currency_code'] ?? 'NGN',
+       pricingMode: json['pricing_mode'] ?? 'fixed',
+       categories: List<String>.from(json['categories'] ?? const []),
+@@ -70,6 +77,9 @@ class Offer {
+       sessionTime: json['session_time'],
+       locationType: json['location_type'],
+       locationText: json['location_text'],
++      expiresAt: json['expires_at'] != null
++          ? DateTime.tryParse(json['expires_at'])
++          : null,
+       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
+       counterparty: json['counterparty'] is Map<String, dynamic>
+@@ -92,3 +102,12 @@ class Offer {
+     return '₦$buf';
+   }
+ }
++
++/// The API sometimes returns pricing_amount as a decimal string
++/// (e.g. "500000.00") instead of a JSON number — handle both.
++num _parseNum(dynamic value) {
++  if (value == null) return 0;
++  if (value is num) return value;
++  if (value is String) return num.tryParse(value) ?? 0;
++  return 0;
++}
+diff --git a/mobile_frontend/lib/features/shared/offer_bubble.dart b/mobile_frontend/lib/features/shared/offer_bubble.dart
+index 73fe4cb..f948701 100644
+--- a/mobile_frontend/lib/features/shared/offer_bubble.dart
++++ b/mobile_frontend/lib/features/shared/offer_bubble.dart
+@@ -70,8 +70,8 @@ class OfferBubble extends StatelessWidget {
+                 const SizedBox(height: 2),
+                 Text(
+                   payload.formattedPrice +
+-                      (payload.validFor != null
+-                          ? ' · Valid for ${payload.validFor}'
++                      (payload.remainingLabel() != null
++                          ? ' · ${payload.remainingLabel()}'
+                           : ''),
+                   style: TextStyle(
+                     fontSize: 12,
+diff --git a/mobile_frontend/lib/features/shared/offer_details_screen.dart b/mobile_frontend/lib/features/shared/offer_details_screen.dart
+index 4eff0af..68843b8 100644
+--- a/mobile_frontend/lib/features/shared/offer_details_screen.dart
++++ b/mobile_frontend/lib/features/shared/offer_details_screen.dart
+@@ -1,3 +1,4 @@
++import 'dart:async';
+ import 'package:flutter/material.dart';
+ import 'package:mobile_frontend/features/shared/offer_message_payload.dart';
+ import 'package:mobile_frontend/services/offer_service.dart';
+@@ -25,6 +26,49 @@ class OfferDetailsScreen extends StatefulWidget {
+ 
+ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
+   bool _declining = false;
++  Timer? _ticker;
++  Duration? _remaining;
++
++  @override
++  void initState() {
++    super.initState();
++    if (widget.payload.expiresAt != null) {
++      _updateRemaining();
++      // Tick every minute — matches the "48h : 20m" granularity in the
++      // design; switch to Duration(seconds: 1) if you want live seconds.
++      _ticker = Timer.periodic(const Duration(minutes: 1), (_) => _updateRemaining());
++    }
++  }
++
++  void _updateRemaining() {
++    final expiresAt = widget.payload.expiresAt;
++    if (expiresAt == null) return;
++    final diff = expiresAt.difference(DateTime.now());
++    if (mounted) {
++      setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
++    }
++  }
++
++  @override
++  void dispose() {
++    _ticker?.cancel();
++    super.dispose();
++  }
++
++  String get _countdownText {
++    final r = _remaining;
++    if (r == null) {
++      // No expiresAt on this payload (older message) — fall back to the
++      // static label it was created with, if any.
++      return widget.payload.validFor ?? '';
++    }
++    if (r == Duration.zero) return 'Expired';
++    final hours = r.inHours;
++    final minutes = r.inMinutes % 60;
++    return '${hours}h : ${minutes.toString().padLeft(2, '0')}m';
++  }
++
++  bool get _isExpired => _remaining == Duration.zero;
+ 
+   Future<void> _decline() async {
+     setState(() => _declining = true);
+@@ -142,7 +186,7 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
+                             ),
+                           ],
+                         ),
+-                        if (p.validFor != null)
++                        if (_countdownText.isNotEmpty)
+                           Column(
+                             crossAxisAlignment: CrossAxisAlignment.end,
+                             children: [
+@@ -151,9 +195,9 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
+                                       fontSize: 12, color: Colors.grey)),
+                               const SizedBox(height: 4),
+                               Text(
+-                                p.validFor!,
+-                                style: const TextStyle(
+-                                  color: Colors.red,
++                                _countdownText,
++                                style: TextStyle(
++                                  color: _isExpired ? Colors.grey : Colors.red,
+                                   fontWeight: FontWeight.bold,
+                                 ),
+                               ),
+@@ -209,12 +253,28 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
+                   ),
+                 ),
+               ],
++              if (_isExpired) ...[
++                const SizedBox(height: 16),
++                Container(
++                  width: double.infinity,
++                  padding: const EdgeInsets.all(12),
++                  decoration: BoxDecoration(
++                    color: Colors.grey.shade200,
++                    borderRadius: BorderRadius.circular(10),
++                  ),
++                  child: const Text(
++                    'This offer has expired.',
++                    textAlign: TextAlign.center,
++                    style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600),
++                  ),
++                ),
++              ],
+               const SizedBox(height: 24),
+               SizedBox(
+                 width: double.infinity,
+                 height: 50,
+                 child: OutlinedButton.icon(
+-                  onPressed: _declining ? null : _decline,
++                  onPressed: (_declining || _isExpired) ? null : _decline,
+                   icon: _declining
+                       ? const SizedBox(
+                           width: 16,
+@@ -240,7 +300,7 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
+                 width: double.infinity,
+                 height: 50,
+                 child: ElevatedButton(
+-                  onPressed: _accept,
++                  onPressed: _isExpired ? null : _accept,
+                   style: ElevatedButton.styleFrom(
+                     backgroundColor: _orange,
+                     shape: RoundedRectangleBorder(
+diff --git a/mobile_frontend/lib/features/shared/offer_message_payload.dart b/mobile_frontend/lib/features/shared/offer_message_payload.dart
+index 0714b43..df57d48 100644
+--- a/mobile_frontend/lib/features/shared/offer_message_payload.dart
++++ b/mobile_frontend/lib/features/shared/offer_message_payload.dart
+@@ -12,7 +12,8 @@ class OfferMessagePayload {
+   final String currencyCode;
+   final String pricingMode; // 'fixed' | 'contact'
+   final List<String> whatsIncluded;
+-  final String? validFor; // e.g. "48hrs" — display only, see note in service
++  final DateTime? expiresAt; // drives the live countdown
++  final String? validFor; // legacy label, kept for messages sent before expiresAt existed
+   final String? note;
+ 
+   OfferMessagePayload({
+@@ -21,6 +22,7 @@ class OfferMessagePayload {
+     required this.currencyCode,
+     required this.pricingMode,
+     required this.whatsIncluded,
++    this.expiresAt,
+     this.validFor,
+     this.note,
+   });
+@@ -31,6 +33,7 @@ class OfferMessagePayload {
+         'currencyCode': currencyCode,
+         'pricingMode': pricingMode,
+         'whatsIncluded': whatsIncluded,
++        if (expiresAt != null) 'expiresAt': expiresAt!.toIso8601String(),
+         if (validFor != null) 'validFor': validFor,
+         if (note != null) 'note': note,
+       };
+@@ -49,6 +52,9 @@ class OfferMessagePayload {
+         currencyCode: data['currencyCode'] ?? 'NGN',
+         pricingMode: data['pricingMode'] ?? 'fixed',
+         whatsIncluded: List<String>.from(data['whatsIncluded'] ?? const []),
++        expiresAt: data['expiresAt'] != null
++            ? DateTime.tryParse(data['expiresAt'])
++            : null,
+         validFor: data['validFor'],
+         note: data['note'],
+       );
+@@ -57,6 +63,28 @@ class OfferMessagePayload {
+     }
+   }
+ 
++  /// Human-readable remaining time, e.g. "2d 3h left" / "45m left" /
++  /// "Expired". Falls back to the legacy [validFor] label if there's no
++  /// [expiresAt] on this payload (older messages).
++  String? remainingLabel({DateTime? now}) {
++    if (expiresAt == null) {
++      return validFor == null ? null : 'Valid for $validFor';
++    }
++    final n = now ?? DateTime.now();
++    final diff = expiresAt!.difference(n);
++    if (diff.isNegative) return 'Expired';
++    if (diff.inDays >= 1) {
++      return '${diff.inDays}d ${diff.inHours % 24}h left';
++    }
++    if (diff.inHours >= 1) {
++      return '${diff.inHours}h ${diff.inMinutes % 60}m left';
++    }
++    return '${diff.inMinutes}m left';
++  }
++
++  bool get isExpired =>
++      expiresAt != null && expiresAt!.isBefore(DateTime.now());
++
+   String get formattedPrice {
+     if (pricingMode == 'contact') return 'Contact for price';
+     final s = price.toStringAsFixed(0);
+diff --git a/mobile_frontend/lib/features/shared/send_custom_offer_screen.dart b/mobile_frontend/lib/features/shared/send_custom_offer_screen.dart
+index 459f47c..8a39a22 100644
+--- a/mobile_frontend/lib/features/shared/send_custom_offer_screen.dart
++++ b/mobile_frontend/lib/features/shared/send_custom_offer_screen.dart
+@@ -44,6 +44,22 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
+ 
+   static const _validForOptions = ['24hrs', '48hrs', '72hrs', '1 week'];
+ 
++  DateTime? get _computedExpiresAt {
++    if (_validFor == null) return null;
++    final now = DateTime.now();
++    switch (_validFor) {
++      case '24hrs':
++        return now.add(const Duration(hours: 24));
++      case '48hrs':
++        return now.add(const Duration(hours: 48));
++      case '72hrs':
++        return now.add(const Duration(hours: 72));
++      case '1 week':
++        return now.add(const Duration(days: 7));
++    }
++    return null;
++  }
++
+   @override
+   void dispose() {
+     _priceController.dispose();
+@@ -78,16 +94,10 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
+       return;
+     }
+ 
+-    // "Valid For" isn't part of the /api/offers schema yet (no expiry
+-    // field on the Offer resource). Until the backend adds one, we fold
+-    // it into the note so the client still sees it.
++    // "Valid For" is sent as a real expiresAt now that we know the API
++    // returns (and, per this request, accepts) that field.
++    final expiresAt = _computedExpiresAt;
+     final note = _noteController.text.trim();
+-    final combinedNote = _validFor == null
+-        ? note
+-        : [
+-            note,
+-            'This offer is valid for $_validFor.',
+-          ].where((s) => s.isNotEmpty).join(' ');
+ 
+     setState(() => _sending = true);
+     try {
+@@ -100,11 +110,12 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
+         pricingAmount: price,
+         pricingMode: 'fixed',
+         currencyCode: 'NGN',
+-        description: combinedNote.isEmpty ? null : combinedNote,
++        description: note.isEmpty ? null : note,
+         whatsIncluded: _whatsIncluded,
+         locationText: _locationTextController.text.trim().isEmpty
+             ? null
+             : _locationTextController.text.trim(),
++        expiresAt: expiresAt,
+       );
+ 
+       // Drop the offer into the chat as its own bubble, the same way
+@@ -112,13 +123,16 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
+       // (what the user actually typed) rather than offer.pricingAmount —
+       // if the backend's create-offer response is ever wrapped or shaped
+       // differently than expected, this keeps the bubble showing the
+-      // right number regardless.
++      // right number regardless. Prefer offer.expiresAt (what the server
++      // actually stored) over our local computation, falling back to the
++      // local one if the server didn't echo it back.
+       final messagePayload = OfferMessagePayload(
+         offerId: offer.id,
+         price: price,
+         currencyCode: 'NGN',
+         pricingMode: 'fixed',
+         whatsIncluded: _whatsIncluded,
++        expiresAt: offer.expiresAt ?? expiresAt,
+         validFor: _validFor,
+         note: note.isEmpty ? null : note,
+       );
+diff --git a/mobile_frontend/lib/services/offer_service.dart b/mobile_frontend/lib/services/offer_service.dart
+index a2253c9..cf01ce1 100644
+--- a/mobile_frontend/lib/services/offer_service.dart
++++ b/mobile_frontend/lib/services/offer_service.dart
+@@ -31,6 +31,7 @@ class OfferService {
+     String? sessionTime,
+     String? locationType,
+     String? locationText,
++    DateTime? expiresAt,
+   }) async {
+     final body = {
+       'sentTo': sentTo,
+@@ -49,6 +50,12 @@ class OfferService {
+       if (sessionTime != null) 'sessionTime': sessionTime,
+       if (locationType != null) 'locationType': locationType,
+       if (locationText != null) 'locationText': locationText,
++      // The response includes an `expires_at` field, so the backend
++      // supports it — but the exact request key it expects isn't
++      // documented. "expiresAt" matches the camelCase convention of every
++      // other field here; if the server ignores it, expires_at will just
++      // keep coming back null and this is the first thing to check.
++      if (expiresAt != null) 'expiresAt': expiresAt.toIso8601String(),
+     };
+ 
+     final res = await http.post(
+@@ -97,6 +104,7 @@ class OfferService {
+     required String token,
+     required String id,
+   }) async {
++    _requireId(id);
+     final res = await http.patch(
+       Uri.parse('$_baseUrl/offers/$id/accept'),
+       headers: _headers(token),
+@@ -112,6 +120,7 @@ class OfferService {
+     required String token,
+     required String id,
+   }) async {
++    _requireId(id);
+     final res = await http.patch(
+       Uri.parse('$_baseUrl/offers/$id/decline'),
+       headers: _headers(token),
+@@ -126,6 +135,7 @@ class OfferService {
+     required String token,
+     required String id,
+   }) async {
++    _requireId(id);
+     final res = await http.patch(
+       Uri.parse('$_baseUrl/offers/$id/cancel'),
+       headers: _headers(token),
+@@ -135,6 +145,16 @@ class OfferService {
+     }
+   }
+ 
++  void _requireId(String id) {
++    if (id.trim().isEmpty) {
++      throw Exception(
++        'This offer has no id — it looks like it wasn\'t parsed '
++        'correctly when it was created. Check the "Offer.fromJson: no id '
++        'field found" print from when the offer was sent.',
++      );
++    }
++  }
++
+   String _extractError(http.Response res, String fallback) {
+     // ignore: avoid_print
+     print('OfferService error ${res.statusCode}: ${res.body}');

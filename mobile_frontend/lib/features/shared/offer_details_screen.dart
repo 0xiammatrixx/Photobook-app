@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile_frontend/features/shared/offer_message_payload.dart';
 import 'package:mobile_frontend/services/offer_service.dart';
@@ -25,6 +26,49 @@ class OfferDetailsScreen extends StatefulWidget {
 
 class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
   bool _declining = false;
+  Timer? _ticker;
+  Duration? _remaining;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.payload.expiresAt != null) {
+      _updateRemaining();
+      // Tick every minute — matches the "48h : 20m" granularity in the
+      // design; switch to Duration(seconds: 1) if you want live seconds.
+      _ticker = Timer.periodic(const Duration(minutes: 1), (_) => _updateRemaining());
+    }
+  }
+
+  void _updateRemaining() {
+    final expiresAt = widget.payload.expiresAt;
+    if (expiresAt == null) return;
+    final diff = expiresAt.difference(DateTime.now());
+    if (mounted) {
+      setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  String get _countdownText {
+    final r = _remaining;
+    if (r == null) {
+      // No expiresAt on this payload (older message) — fall back to the
+      // static label it was created with, if any.
+      return widget.payload.validFor ?? '';
+    }
+    if (r == Duration.zero) return 'Expired';
+    final hours = r.inHours;
+    final minutes = r.inMinutes % 60;
+    return '${hours}h : ${minutes.toString().padLeft(2, '0')}m';
+  }
+
+  bool get _isExpired => _remaining == Duration.zero;
 
   Future<void> _decline() async {
     setState(() => _declining = true);
@@ -142,7 +186,7 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
                             ),
                           ],
                         ),
-                        if (p.validFor != null)
+                        if (_countdownText.isNotEmpty)
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
@@ -151,9 +195,9 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
                                       fontSize: 12, color: Colors.grey)),
                               const SizedBox(height: 4),
                               Text(
-                                p.validFor!,
-                                style: const TextStyle(
-                                  color: Colors.red,
+                                _countdownText,
+                                style: TextStyle(
+                                  color: _isExpired ? Colors.grey : Colors.red,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -209,12 +253,28 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
                   ),
                 ),
               ],
+              if (_isExpired) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'This offer has expired.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: OutlinedButton.icon(
-                  onPressed: _declining ? null : _decline,
+                  onPressed: (_declining || _isExpired) ? null : _decline,
                   icon: _declining
                       ? const SizedBox(
                           width: 16,
@@ -240,7 +300,7 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _accept,
+                  onPressed: _isExpired ? null : _accept,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _orange,
                     shape: RoundedRectangleBorder(
