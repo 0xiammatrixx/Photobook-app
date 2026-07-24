@@ -10,11 +10,48 @@ class ChatProvider extends ChangeNotifier {
   String? _myId;
   String? _token;
 
+  // userId -> online/offline + last seen
+  final Map<String, bool> _onlineUsers = {};
+  final Map<String, DateTime?> _lastSeenAt = {};
+  // conversationId -> set of userIds currently typing in that room
+  final Map<String, Set<String>> _typingUsers = {};
+
+  bool isUserOnline(String userId) => _onlineUsers[userId] ?? false;
+  DateTime? lastSeenAt(String userId) => _lastSeenAt[userId];
+
+  bool isUserTyping(String conversationId, String userId) =>
+      _typingUsers[conversationId]?.contains(userId) ?? false;
+
   void connectSocket(String token, String userId) {
     _myId = userId;
     _token = token;
-    _socket.connect(token, _handleIncomingMessage);
+    _socket.connect(
+      token,
+      _handleIncomingMessage,
+      onTyping: (uid, conversationId) {
+        _typingUsers.putIfAbsent(conversationId, () => {}).add(uid);
+        notifyListeners();
+      },
+      onStopTyping: (uid, conversationId) {
+        _typingUsers[conversationId]?.remove(uid);
+        notifyListeners();
+      },
+      onUserOnline: (uid) {
+        _onlineUsers[uid] = true;
+        notifyListeners();
+      },
+      onUserOffline: (uid, lastSeenIso) {
+        _onlineUsers[uid] = false;
+        if (lastSeenIso != null) {
+          _lastSeenAt[uid] = DateTime.tryParse(lastSeenIso);
+        }
+        notifyListeners();
+      },
+    );
   }
+
+  void startTyping(String conversationId) => _socket.startTyping(conversationId);
+  void stopTyping(String conversationId) => _socket.stopTyping(conversationId);
 
   void _handleIncomingMessage(dynamic msg) {
     print("📨 Provider handling message: $msg");
@@ -84,6 +121,13 @@ class ChatProvider extends ChangeNotifier {
     try {
       _conversations = await _service.getConversations(token: token);
       await _loadFavorites();
+      // Join every conversation room — not just the one currently open —
+      // so incoming messages *and* incoming calls (webrtc_offer is
+      // broadcast to the room) reach you no matter which screen you're on.
+      for (final c in _conversations) {
+        final id = c['id'];
+        if (id != null) _socket.joinRoom(id);
+      }
       notifyListeners();
       print("💬 Conversations: $_conversations");
     } catch (e) {

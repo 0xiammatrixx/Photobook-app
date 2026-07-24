@@ -13,15 +13,19 @@ const _green = Color(0xFF047418);
 ///   "Edit Offer" button that reopens the custom-offer form pre-filled,
 ///   so they can send an updated offer for the same negotiation.
 ///
-/// When [isDeclined] is true it renders as a muted, struck-through
-/// "Offer Declined" version regardless of who's viewing it. When
-/// [isSuperseded] is true (the sender edited it into a newer offer) it
-/// renders as a muted "Offer Updated" version.
+/// [resolvedStatus] should be the *actual backend* offer status
+/// ('pending' | 'declined' | 'cancelled' | 'accepted' | null if not yet
+/// loaded) — not just something remembered locally, since local-only
+/// state disappears the moment the screen is rebuilt (app restart, next
+/// day, etc.) while the backend still correctly remembers it. Pass
+/// [isLocallyEdited] true only when *this session* is the one that just
+/// cancelled this specific offer via the edit flow, purely so the label
+/// can say "Offer Updated" instead of a bare "Offer Cancelled".
 class OfferBubble extends StatelessWidget {
   final OfferMessagePayload payload;
   final bool isMe;
-  final bool isDeclined;
-  final bool isSuperseded;
+  final String? resolvedStatus;
+  final bool isLocallyEdited;
   final String token;
   final String conversationId;
   final String recipientId;
@@ -34,8 +38,8 @@ class OfferBubble extends StatelessWidget {
     super.key,
     required this.payload,
     required this.isMe,
-    required this.isDeclined,
-    required this.isSuperseded,
+    required this.resolvedStatus,
+    required this.isLocallyEdited,
     required this.token,
     required this.conversationId,
     required this.recipientId,
@@ -45,7 +49,10 @@ class OfferBubble extends StatelessWidget {
     this.counterpartyAvatarUrl,
   });
 
-  bool get _isClosed => isDeclined || isSuperseded;
+  bool get _isClosed =>
+      resolvedStatus == 'declined' ||
+      resolvedStatus == 'cancelled' ||
+      resolvedStatus == 'accepted';
 
   Future<void> _openDetails(BuildContext context) async {
     if (_isClosed) return;
@@ -89,9 +96,16 @@ class OfferBubble extends StatelessWidget {
   }
 
   String get _title {
-    if (isDeclined) return 'Offer Declined';
-    if (isSuperseded) return 'Offer Updated';
-    return 'Custom Offer';
+    switch (resolvedStatus) {
+      case 'declined':
+        return 'Offer Declined';
+      case 'cancelled':
+        return isLocallyEdited ? 'Offer Updated' : 'Offer Cancelled';
+      case 'accepted':
+        return 'Offer Accepted';
+      default:
+        return 'Custom Offer';
+    }
   }
 
   @override

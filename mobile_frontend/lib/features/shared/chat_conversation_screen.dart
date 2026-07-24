@@ -1,11 +1,18 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profilepage.dart';
+import 'package:mobile_frontend/features/shared/call_screen.dart';
 import 'package:mobile_frontend/features/shared/offer_bubble.dart';
 import 'package:mobile_frontend/features/shared/offer_message_payload.dart';
 import 'package:mobile_frontend/features/shared/send_custom_offer_screen.dart';
+import 'package:mobile_frontend/providers/call_provider.dart';
 import 'package:mobile_frontend/providers/chat_provider.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
+import 'package:mobile_frontend/services/offer_service.dart';
 import 'package:mobile_frontend/services/profileservice.dart';
 import 'package:provider/provider.dart';
+
+const _orange = Color(0xFFFF7A33);
  
 class ChatConversationScreen extends StatefulWidget {
   final String conversationId;
@@ -33,9 +40,69 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
   bool _showActions = false;
   late ChatProvider _chatProvider; // ✅ save reference
  
-  // In-memory only for now — see caveat in the offer-details write-up.
+  // These two are optimistic, this-session-only overrides for instant
+  // feedback right after you decline/edit something yourself — the real,
+  // persistent source of truth is _offerStatuses below (fetched from the
+  // backend), which is what actually survives reopening the conversation
+  // tomorrow or after an app restart.
   final Set<String> _declinedOfferIds = {};
   final Set<String> _supersededOfferIds = {};
+
+  // offerId -> backend status ('pending' | 'declined' | 'cancelled' |
+  // 'accepted'). Populated once per screen open from GET /api/offers.
+  Map<String, String> _offerStatuses = {};
+
+  Timer? _typingStopTimer;
+  bool _isTypingActive = false;
+
+  Future<void> _loadOfferStatuses(String token) async {
+    try {
+      final result = await OfferService().getOffers(token: token);
+      final statuses = <String, String>{};
+      for (final o in [...?result['sent'], ...?result['received']]) {
+        statuses[o.id] = o.status;
+      }
+      if (mounted) setState(() => _offerStatuses = statuses);
+    } catch (e) {
+      // Non-fatal — offer bubbles just fall back to showing "pending"
+      // (or whatever this-session's local decline/edit state says) until
+      // the next successful load.
+      // ignore: avoid_print
+      print('Could not load offer statuses: $e');
+    }
+  }
+
+  void _onTextChanged(String text) {
+    if (text.trim().isEmpty) {
+      _stopTypingIfNeeded();
+      return;
+    }
+    if (!_isTypingActive) {
+      _isTypingActive = true;
+      context.read<ChatProvider>().startTyping(widget.conversationId);
+    }
+    // Auto-stop if the user pauses for 3s without clearing/sending —
+    // the server only gets an explicit typing:stop from us otherwise.
+    _typingStopTimer?.cancel();
+    _typingStopTimer = Timer(const Duration(seconds: 3), _stopTypingIfNeeded);
+  }
+
+  void _stopTypingIfNeeded() {
+    _typingStopTimer?.cancel();
+    if (_isTypingActive) {
+      _isTypingActive = false;
+      context.read<ChatProvider>().stopTyping(widget.conversationId);
+    }
+  }
+
+  String _formatLastSeen(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.day}/${dt.month}/${dt.year}';
+  }
  
   @override
   void initState() {
@@ -53,6 +120,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
           }
         });
       });
+      _loadOfferStatuses(token);
     });
  
     _scrollController.addListener(() {
@@ -65,6 +133,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
  
   @override
   void dispose() {
+    _stopTypingIfNeeded();
     _chatProvider.leaveConversation(widget.conversationId); // ✅ no context
     _controller.dispose();
     _scrollController.dispose();
@@ -75,6 +144,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     final content = _controller.text.trim();
     if (content.isEmpty) return;
     _controller.clear();
+    _stopTypingIfNeeded();
     final token = context.read<UserProvider>().token ?? '';
     context.read<ChatProvider>().sendMessage(
       token: token,
@@ -147,6 +217,31 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     );
     setState(() => _showActions = false);
   }
+
+  Future<void> _startCall({required bool isVideo}) async {
+    final callProvider = context.read<CallProvider>();
+    if (callProvider.status != CallStatus.idle) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You\'re already on a call.')),
+      );
+      return;
+    }
+
+    // Push the call screen first so the caller sees "Calling..." /
+    // permission prompts immediately, rather than waiting in silence.
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CallScreen()),
+    );
+
+    await callProvider.startCall(
+      conversationId: widget.conversationId,
+      peerUserId: widget.recipientId,
+      peerName: widget.title,
+      peerAvatarUrl: widget.avatarUrl,
+      isVideo: isVideo,
+    );
+  }
  
   @override
   Widget build(BuildContext context) {
@@ -162,37 +257,90 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundImage: widget.avatarUrl != null
-                  ? NetworkImage(widget.avatarUrl!)
-                  : null,
-              child: widget.avatarUrl == null
-                  ? const Icon(Icons.person, size: 18)
-                  : null,
+        title: GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CreativeProfilePage(
+                isOwner: false,
+                creativeId: widget.recipientId,
+              ),
             ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundImage: widget.avatarUrl != null
+                    ? NetworkImage(widget.avatarUrl!)
+                    : null,
+                child: widget.avatarUrl == null
+                    ? const Icon(Icons.person, size: 18)
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
                   ),
-                ),
-                const Text(
-                  'Active',
-                  style: TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-              ],
-            ),
-          ],
+                  Consumer<ChatProvider>(
+                    builder: (context, chatProvider, _) {
+                      final isTyping = chatProvider.isUserTyping(
+                        widget.conversationId,
+                        widget.recipientId,
+                      );
+                      final isOnline =
+                          chatProvider.isUserOnline(widget.recipientId);
+                      final lastSeen =
+                          chatProvider.lastSeenAt(widget.recipientId);
+
+                      String status;
+                      Color color = Colors.grey;
+                      if (isTyping) {
+                        status = 'typing...';
+                        color = const Color(0xFFFF7A33);
+                      } else if (isOnline) {
+                        status = 'Active now';
+                        color = Colors.green;
+                      } else if (lastSeen != null) {
+                        status = 'Active ${_formatLastSeen(lastSeen)}';
+                      } else {
+                        // No presence event received yet for this user in
+                        // this session — the API has no "who's online
+                        // right now" query, only online/offline events as
+                        // they happen, so there's nothing to show yet.
+                        status = '';
+                      }
+
+                      if (status.isEmpty) return const SizedBox.shrink();
+                      return Text(
+                        status,
+                        style: TextStyle(fontSize: 11, color: color),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.call_outlined, color: _orange),
+            onPressed: () => _startCall(isVideo: false),
+          ),
+          IconButton(
+            icon: const Icon(Icons.videocam_outlined, color: _orange),
+            onPressed: () => _startCall(isVideo: true),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -223,6 +371,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                       recipientId: widget.recipientId,
                       counterpartyName: widget.title,
                       counterpartyAvatarUrl: widget.avatarUrl,
+                      offerStatuses: _offerStatuses,
                       declinedOfferIds: _declinedOfferIds,
                       supersededOfferIds: _supersededOfferIds,
                       onOfferDeclined: (id) =>
@@ -284,6 +433,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                         border: InputBorder.none,
                         isDense: true,
                       ),
+                      onChanged: _onTextChanged,
                       onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
@@ -335,6 +485,7 @@ class _MessageBubble extends StatelessWidget {
   final String recipientId;
   final String counterpartyName;
   final String? counterpartyAvatarUrl;
+  final Map<String, String> offerStatuses;
   final Set<String> declinedOfferIds;
   final Set<String> supersededOfferIds;
   final void Function(String offerId) onOfferDeclined;
@@ -347,13 +498,24 @@ class _MessageBubble extends StatelessWidget {
     required this.conversationId,
     required this.recipientId,
     required this.counterpartyName,
+    required this.offerStatuses,
     required this.declinedOfferIds,
     required this.supersededOfferIds,
     required this.onOfferDeclined,
     required this.onOfferEdited,
     this.counterpartyAvatarUrl,
   });
- 
+
+  /// This-session optimistic taps (declinedOfferIds/supersededOfferIds)
+  /// win immediately for instant feedback; otherwise fall back to
+  /// whatever the backend actually says (or null/"pending" if not loaded
+  /// yet or not found).
+  String? _resolvedStatus(String offerId) {
+    if (declinedOfferIds.contains(offerId)) return 'declined';
+    if (supersededOfferIds.contains(offerId)) return 'cancelled';
+    return offerStatuses[offerId];
+  }
+
   @override
   Widget build(BuildContext context) {
     final content = message['content'] ?? '';
@@ -393,8 +555,9 @@ class _MessageBubble extends StatelessWidget {
             ? OfferBubble(
                 payload: offerPayload,
                 isMe: isMe,
-                isDeclined: declinedOfferIds.contains(offerPayload.offerId),
-                isSuperseded: supersededOfferIds.contains(offerPayload.offerId),
+                resolvedStatus: _resolvedStatus(offerPayload.offerId),
+                isLocallyEdited:
+                    supersededOfferIds.contains(offerPayload.offerId),
                 token: token,
                 conversationId: conversationId,
                 recipientId: recipientId,

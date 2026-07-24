@@ -1,3 +1,251 @@
+diff --git a/mobile_frontend/lib/features/shared/chat_conversation_screen.dart b/mobile_frontend/lib/features/shared/chat_conversation_screen.dart
+index b693cc8..c6b7416 100644
+--- a/mobile_frontend/lib/features/shared/chat_conversation_screen.dart
++++ b/mobile_frontend/lib/features/shared/chat_conversation_screen.dart
+@@ -1,4 +1,6 @@
++import 'dart:async';
+ import 'package:flutter/material.dart';
++import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profilepage.dart';
+ import 'package:mobile_frontend/features/shared/offer_bubble.dart';
+ import 'package:mobile_frontend/features/shared/offer_message_payload.dart';
+ import 'package:mobile_frontend/features/shared/send_custom_offer_screen.dart';
+@@ -35,6 +37,42 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
+  
+   // In-memory only for now — see caveat in the offer-details write-up.
+   final Set<String> _declinedOfferIds = {};
++  final Set<String> _supersededOfferIds = {};
++
++  Timer? _typingStopTimer;
++  bool _isTypingActive = false;
++
++  void _onTextChanged(String text) {
++    if (text.trim().isEmpty) {
++      _stopTypingIfNeeded();
++      return;
++    }
++    if (!_isTypingActive) {
++      _isTypingActive = true;
++      context.read<ChatProvider>().startTyping(widget.conversationId);
++    }
++    // Auto-stop if the user pauses for 3s without clearing/sending —
++    // the server only gets an explicit typing:stop from us otherwise.
++    _typingStopTimer?.cancel();
++    _typingStopTimer = Timer(const Duration(seconds: 3), _stopTypingIfNeeded);
++  }
++
++  void _stopTypingIfNeeded() {
++    _typingStopTimer?.cancel();
++    if (_isTypingActive) {
++      _isTypingActive = false;
++      context.read<ChatProvider>().stopTyping(widget.conversationId);
++    }
++  }
++
++  String _formatLastSeen(DateTime dt) {
++    final diff = DateTime.now().difference(dt);
++    if (diff.inMinutes < 1) return 'just now';
++    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
++    if (diff.inHours < 24) return '${diff.inHours}h ago';
++    if (diff.inDays < 7) return '${diff.inDays}d ago';
++    return '${dt.day}/${dt.month}/${dt.year}';
++  }
+  
+   @override
+   void initState() {
+@@ -64,6 +102,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
+  
+   @override
+   void dispose() {
++    _stopTypingIfNeeded();
+     _chatProvider.leaveConversation(widget.conversationId); // ✅ no context
+     _controller.dispose();
+     _scrollController.dispose();
+@@ -74,6 +113,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
+     final content = _controller.text.trim();
+     if (content.isEmpty) return;
+     _controller.clear();
++    _stopTypingIfNeeded();
+     final token = context.read<UserProvider>().token ?? '';
+     context.read<ChatProvider>().sendMessage(
+       token: token,
+@@ -161,36 +201,79 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
+           icon: const Icon(Icons.arrow_back, color: Colors.black),
+           onPressed: () => Navigator.pop(context),
+         ),
+-        title: Row(
+-          children: [
+-            CircleAvatar(
+-              radius: 18,
+-              backgroundImage: widget.avatarUrl != null
+-                  ? NetworkImage(widget.avatarUrl!)
+-                  : null,
+-              child: widget.avatarUrl == null
+-                  ? const Icon(Icons.person, size: 18)
+-                  : null,
++        title: GestureDetector(
++          onTap: () => Navigator.push(
++            context,
++            MaterialPageRoute(
++              builder: (_) => CreativeProfilePage(
++                isOwner: false,
++                creativeId: widget.recipientId,
++              ),
+             ),
+-            const SizedBox(width: 10),
+-            Column(
+-              crossAxisAlignment: CrossAxisAlignment.start,
+-              children: [
+-                Text(
+-                  widget.title,
+-                  style: const TextStyle(
+-                    fontSize: 14,
+-                    fontWeight: FontWeight.bold,
+-                    color: Colors.black,
++          ),
++          child: Row(
++            children: [
++              CircleAvatar(
++                radius: 18,
++                backgroundImage: widget.avatarUrl != null
++                    ? NetworkImage(widget.avatarUrl!)
++                    : null,
++                child: widget.avatarUrl == null
++                    ? const Icon(Icons.person, size: 18)
++                    : null,
++              ),
++              const SizedBox(width: 10),
++              Column(
++                crossAxisAlignment: CrossAxisAlignment.start,
++                children: [
++                  Text(
++                    widget.title,
++                    style: const TextStyle(
++                      fontSize: 14,
++                      fontWeight: FontWeight.bold,
++                      color: Colors.black,
++                    ),
+                   ),
+-                ),
+-                const Text(
+-                  'Active',
+-                  style: TextStyle(fontSize: 11, color: Colors.grey),
+-                ),
+-              ],
+-            ),
+-          ],
++                  Consumer<ChatProvider>(
++                    builder: (context, chatProvider, _) {
++                      final isTyping = chatProvider.isUserTyping(
++                        widget.conversationId,
++                        widget.recipientId,
++                      );
++                      final isOnline =
++                          chatProvider.isUserOnline(widget.recipientId);
++                      final lastSeen =
++                          chatProvider.lastSeenAt(widget.recipientId);
++
++                      String status;
++                      Color color = Colors.grey;
++                      if (isTyping) {
++                        status = 'typing...';
++                        color = const Color(0xFFFF7A33);
++                      } else if (isOnline) {
++                        status = 'Active now';
++                        color = Colors.green;
++                      } else if (lastSeen != null) {
++                        status = 'Active ${_formatLastSeen(lastSeen)}';
++                      } else {
++                        // No presence event received yet for this user in
++                        // this session — the API has no "who's online
++                        // right now" query, only online/offline events as
++                        // they happen, so there's nothing to show yet.
++                        status = '';
++                      }
++
++                      if (status.isEmpty) return const SizedBox.shrink();
++                      return Text(
++                        status,
++                        style: TextStyle(fontSize: 11, color: color),
++                      );
++                    },
++                  ),
++                ],
++              ),
++            ],
++          ),
+         ),
+       ),
+       body: Column(
+@@ -218,11 +301,16 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
+                       message: msg,
+                       isMe: isMe,
+                       token: token,
++                      conversationId: widget.conversationId,
++                      recipientId: widget.recipientId,
+                       counterpartyName: widget.title,
+                       counterpartyAvatarUrl: widget.avatarUrl,
+                       declinedOfferIds: _declinedOfferIds,
++                      supersededOfferIds: _supersededOfferIds,
+                       onOfferDeclined: (id) =>
+                           setState(() => _declinedOfferIds.add(id)),
++                      onOfferEdited: (id) =>
++                          setState(() => _supersededOfferIds.add(id)),
+                     );
+                   },
+                 );
+@@ -278,6 +366,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
+                         border: InputBorder.none,
+                         isDense: true,
+                       ),
++                      onChanged: _onTextChanged,
+                       onSubmitted: (_) => _sendMessage(),
+                     ),
+                   ),
+@@ -325,18 +414,26 @@ class _MessageBubble extends StatelessWidget {
+   final Map<String, dynamic> message;
+   final bool isMe;
+   final String token;
++  final String conversationId;
++  final String recipientId;
+   final String counterpartyName;
+   final String? counterpartyAvatarUrl;
+   final Set<String> declinedOfferIds;
++  final Set<String> supersededOfferIds;
+   final void Function(String offerId) onOfferDeclined;
+- 
++  final void Function(String offerId) onOfferEdited;
++
+   const _MessageBubble({
+     required this.message,
+     required this.isMe,
+     required this.token,
++    required this.conversationId,
++    required this.recipientId,
+     required this.counterpartyName,
+     required this.declinedOfferIds,
++    required this.supersededOfferIds,
+     required this.onOfferDeclined,
++    required this.onOfferEdited,
+     this.counterpartyAvatarUrl,
+   });
+  
+@@ -378,11 +475,16 @@ class _MessageBubble extends StatelessWidget {
+         child: offerPayload != null
+             ? OfferBubble(
+                 payload: offerPayload,
++                isMe: isMe,
+                 isDeclined: declinedOfferIds.contains(offerPayload.offerId),
++                isSuperseded: supersededOfferIds.contains(offerPayload.offerId),
+                 token: token,
++                conversationId: conversationId,
++                recipientId: recipientId,
+                 counterpartyName: counterpartyName,
+                 counterpartyAvatarUrl: counterpartyAvatarUrl,
+                 onDeclined: onOfferDeclined,
++                onEdited: onOfferEdited,
+               )
+             : isRateCard
+                 ? _RateCardBubble(content: content)
 diff --git a/mobile_frontend/lib/features/shared/offer.dart b/mobile_frontend/lib/features/shared/offer.dart
 index 4a48cb4..947a4be 100644
 --- a/mobile_frontend/lib/features/shared/offer.dart
@@ -65,10 +313,132 @@ index 4a48cb4..947a4be 100644
 +  return 0;
 +}
 diff --git a/mobile_frontend/lib/features/shared/offer_bubble.dart b/mobile_frontend/lib/features/shared/offer_bubble.dart
-index 73fe4cb..f948701 100644
+index 73fe4cb..697bc75 100644
 --- a/mobile_frontend/lib/features/shared/offer_bubble.dart
 +++ b/mobile_frontend/lib/features/shared/offer_bubble.dart
-@@ -70,8 +70,8 @@ class OfferBubble extends StatelessWidget {
+@@ -1,31 +1,54 @@
+ import 'package:flutter/material.dart';
+ import 'package:mobile_frontend/features/shared/offer_details_screen.dart';
+ import 'package:mobile_frontend/features/shared/offer_message_payload.dart';
++import 'package:mobile_frontend/features/shared/send_custom_offer_screen.dart';
++
++const _green = Color(0xFF047418);
+ 
+ /// Same layout language as `_RateCardBubble`: an icon, a bold title, then
+-/// plain lines underneath. Wrapped in a tap target that opens the
+-/// acceptance/decline screen. When [isDeclined] is true it renders as a
+-/// muted, struck-through "Offer Declined" version of itself instead.
++/// plain lines underneath.
++///
++/// - Recipient (client) view: tapping opens the acceptance/decline screen.
++/// - Sender (creative, [isMe]) view: no accept/decline — instead shows an
++///   "Edit Offer" button that reopens the custom-offer form pre-filled,
++///   so they can send an updated offer for the same negotiation.
++///
++/// When [isDeclined] is true it renders as a muted, struck-through
++/// "Offer Declined" version regardless of who's viewing it. When
++/// [isSuperseded] is true (the sender edited it into a newer offer) it
++/// renders as a muted "Offer Updated" version.
+ class OfferBubble extends StatelessWidget {
+   final OfferMessagePayload payload;
++  final bool isMe;
+   final bool isDeclined;
++  final bool isSuperseded;
+   final String token;
++  final String conversationId;
++  final String recipientId;
+   final String counterpartyName;
+   final String? counterpartyAvatarUrl;
+   final void Function(String offerId) onDeclined;
++  final void Function(String oldOfferId) onEdited;
+ 
+   const OfferBubble({
+     super.key,
+     required this.payload,
++    required this.isMe,
+     required this.isDeclined,
++    required this.isSuperseded,
+     required this.token,
++    required this.conversationId,
++    required this.recipientId,
+     required this.counterpartyName,
+     required this.onDeclined,
++    required this.onEdited,
+     this.counterpartyAvatarUrl,
+   });
+ 
+-  Future<void> _open(BuildContext context) async {
+-    if (isDeclined) return;
++  bool get _isClosed => isDeclined || isSuperseded;
++
++  Future<void> _openDetails(BuildContext context) async {
++    if (_isClosed) return;
+     final result = await Navigator.push<Map<String, dynamic>>(
+       context,
+       MaterialPageRoute(
+@@ -42,45 +65,74 @@ class OfferBubble extends StatelessWidget {
+     }
+   }
+ 
++  Future<void> _openEdit(BuildContext context) async {
++    if (_isClosed) return;
++    final result = await Navigator.push<Map<String, dynamic>>(
++      context,
++      MaterialPageRoute(
++        builder: (_) => SendCustomOfferScreen(
++          token: token,
++          conversationId: conversationId,
++          recipientId: recipientId,
++          recipientName: counterpartyName,
++          editingOfferId: payload.offerId,
++          initialPrice: payload.price,
++          initialWhatsIncluded: payload.whatsIncluded,
++          initialNote: payload.note,
++          initialValidFor: payload.validFor,
++        ),
++      ),
++    );
++    if (result != null && result['editedOfferId'] != null) {
++      onEdited(result['editedOfferId'] as String);
++    }
++  }
++
++  String get _title {
++    if (isDeclined) return 'Offer Declined';
++    if (isSuperseded) return 'Offer Updated';
++    return 'Custom Offer';
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     return InkWell(
+       borderRadius: BorderRadius.circular(12),
+-      onTap: () => _open(context),
++      onTap: (_isClosed || isMe) ? null : () => _openDetails(context),
+       child: Row(
+         mainAxisSize: MainAxisSize.min,
+         crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+-          Text(isDeclined ? '🚫' : '💼', style: const TextStyle(fontSize: 20)),
++          Text(_isClosed ? '🚫' : '💼', style: const TextStyle(fontSize: 20)),
+           const SizedBox(width: 8),
+           Flexible(
+             child: Column(
+               crossAxisAlignment: CrossAxisAlignment.start,
+               children: [
+                 Text(
+-                  isDeclined ? 'Offer Declined' : 'Custom Offer',
++                  _title,
+                   style: TextStyle(
+                     fontWeight: FontWeight.bold,
+                     fontSize: 13,
+-                    color: isDeclined ? Colors.grey : Colors.black,
++                    color: _isClosed ? Colors.grey : Colors.black,
+                     decoration:
+-                        isDeclined ? TextDecoration.lineThrough : null,
++                        _isClosed ? TextDecoration.lineThrough : null,
+                   ),
+                 ),
                  const SizedBox(height: 2),
                  Text(
                    payload.formattedPrice +
@@ -79,6 +449,64 @@ index 73fe4cb..f948701 100644
                            : ''),
                    style: TextStyle(
                      fontSize: 12,
+-                    color: isDeclined ? Colors.grey : Colors.black87,
++                    color: _isClosed ? Colors.grey : Colors.black87,
+                     decoration:
+-                        isDeclined ? TextDecoration.lineThrough : null,
++                        _isClosed ? TextDecoration.lineThrough : null,
+                   ),
+                 ),
+-                if (!isDeclined) ...[
++                if (!_isClosed) ...[
+                   const SizedBox(height: 4),
+                   ...payload.whatsIncluded.map(
+                     (item) => Text(
+@@ -89,15 +141,37 @@ class OfferBubble extends StatelessWidget {
+                           const TextStyle(fontSize: 12, color: Colors.black87),
+                     ),
+                   ),
+-                  const SizedBox(height: 4),
+-                  const Text(
+-                    'Tap to view offer',
+-                    style: TextStyle(
+-                      fontSize: 11,
+-                      color: Colors.grey,
+-                      fontStyle: FontStyle.italic,
++                  const SizedBox(height: 8),
++                  if (isMe)
++                    Align(
++                      alignment: Alignment.centerLeft,
++                      child: OutlinedButton(
++                        onPressed: () => _openEdit(context),
++                        style: OutlinedButton.styleFrom(
++                          side: const BorderSide(color: _green),
++                          foregroundColor: _green,
++                          padding: const EdgeInsets.symmetric(
++                              horizontal: 16, vertical: 6),
++                          shape: RoundedRectangleBorder(
++                            borderRadius: BorderRadius.circular(8),
++                          ),
++                        ),
++                        child: const Text(
++                          'Edit Offer',
++                          style: TextStyle(
++                              fontWeight: FontWeight.bold, fontSize: 12),
++                        ),
++                      ),
++                    )
++                  else
++                    const Text(
++                      'Tap to view offer',
++                      style: TextStyle(
++                        fontSize: 11,
++                        color: Colors.grey,
++                        fontStyle: FontStyle.italic,
++                      ),
+                     ),
+-                  ),
+                 ],
+               ],
+             ),
 diff --git a/mobile_frontend/lib/features/shared/offer_details_screen.dart b/mobile_frontend/lib/features/shared/offer_details_screen.dart
 index 4eff0af..68843b8 100644
 --- a/mobile_frontend/lib/features/shared/offer_details_screen.dart
@@ -269,10 +697,41 @@ index 0714b43..df57d48 100644
      if (pricingMode == 'contact') return 'Contact for price';
      final s = price.toStringAsFixed(0);
 diff --git a/mobile_frontend/lib/features/shared/send_custom_offer_screen.dart b/mobile_frontend/lib/features/shared/send_custom_offer_screen.dart
-index 459f47c..8a39a22 100644
+index 459f47c..b95a97d 100644
 --- a/mobile_frontend/lib/features/shared/send_custom_offer_screen.dart
 +++ b/mobile_frontend/lib/features/shared/send_custom_offer_screen.dart
-@@ -44,6 +44,22 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
+@@ -18,14 +18,30 @@ class SendCustomOfferScreen extends StatefulWidget {
+   final String recipientId;
+   final String recipientName;
+ 
++  // Edit-mode: when set, this screen pre-fills from an existing offer and,
++  // on submit, cancels that offer before creating the replacement (there's
++  // no PATCH-to-edit endpoint, so "editing" = cancel old + send new).
++  final String? editingOfferId;
++  final num? initialPrice;
++  final List<String>? initialWhatsIncluded;
++  final String? initialNote;
++  final String? initialValidFor;
++
+   const SendCustomOfferScreen({
+     super.key,
+     required this.token,
+     required this.conversationId,
+     required this.recipientId,
+     required this.recipientName,
++    this.editingOfferId,
++    this.initialPrice,
++    this.initialWhatsIncluded,
++    this.initialNote,
++    this.initialValidFor,
+   });
+ 
++  bool get isEditing => editingOfferId != null;
++
+   @override
+   State<SendCustomOfferScreen> createState() => _SendCustomOfferScreenState();
+ }
+@@ -44,6 +60,39 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
  
    static const _validForOptions = ['24hrs', '48hrs', '72hrs', '1 week'];
  
@@ -292,10 +751,27 @@ index 459f47c..8a39a22 100644
 +    return null;
 +  }
 +
++  @override
++  void initState() {
++    super.initState();
++    if (widget.isEditing) {
++      if (widget.initialPrice != null) {
++        _priceController.text = widget.initialPrice!.toStringAsFixed(0);
++      }
++      if (widget.initialWhatsIncluded != null) {
++        _whatsIncluded.addAll(widget.initialWhatsIncluded!);
++      }
++      if (widget.initialNote != null) {
++        _noteController.text = widget.initialNote!;
++      }
++      _validFor = widget.initialValidFor;
++    }
++  }
++
    @override
    void dispose() {
      _priceController.dispose();
-@@ -78,16 +94,10 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
+@@ -78,19 +127,28 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
        return;
      }
  
@@ -315,7 +791,25 @@ index 459f47c..8a39a22 100644
  
      setState(() => _sending = true);
      try {
-@@ -100,11 +110,12 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
++      if (widget.isEditing) {
++        try {
++          await OfferService().cancelOffer(
++            token: widget.token,
++            id: widget.editingOfferId!,
++          );
++        } catch (e) {
++          // Best-effort — if the old offer can't be cancelled (already
++          // accepted/declined/expired, etc.) we still want to let the
++          // creative send the corrected offer rather than block them.
++          // ignore: avoid_print
++          print('Could not cancel offer ${widget.editingOfferId} while editing: $e');
++        }
++      }
++
+       final offer = await OfferService().createOffer(
+         token: widget.token,
+         sentTo: widget.recipientId,
+@@ -100,11 +158,12 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
          pricingAmount: price,
          pricingMode: 'fixed',
          currencyCode: 'NGN',
@@ -329,7 +823,7 @@ index 459f47c..8a39a22 100644
        );
  
        // Drop the offer into the chat as its own bubble, the same way
-@@ -112,13 +123,16 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
+@@ -112,13 +171,16 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
        // (what the user actually typed) rather than offer.pricingAmount —
        // if the backend's create-offer response is ever wrapped or shaped
        // differently than expected, this keeps the bubble showing the
@@ -347,11 +841,218 @@ index 459f47c..8a39a22 100644
          validFor: _validFor,
          note: note.isEmpty ? null : note,
        );
+@@ -141,6 +203,12 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
+             validFor: _validFor,
+           ),
+         ),
++        // Completes the Future that whoever pushed *this* screen is
++        // awaiting (e.g. OfferBubble's "Edit Offer" flow) — lets the
++        // original bubble know which old offer id got superseded.
++        result: widget.isEditing
++            ? {'editedOfferId': widget.editingOfferId}
++            : null,
+       );
+     } catch (e) {
+       _showSnack('$e');
+@@ -168,7 +236,7 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
+           onPressed: () => Navigator.pop(context),
+         ),
+         title: const Text(
+-          'Send Custom Offer',
++          widget.isEditing ? 'Edit Custom Offer' : 'Send Custom Offer',
+           style: TextStyle(
+             color: Colors.black,
+             fontWeight: FontWeight.bold,
+@@ -288,7 +356,7 @@ class _SendCustomOfferScreenState extends State<SendCustomOfferScreen> {
+                           ),
+                         )
+                       : const Text(
+-                          'Send Offer',
++                          widget.isEditing ? 'Update Offer' : 'Send Offer',
+                           style: TextStyle(
+                             color: Colors.white,
+                             fontWeight: FontWeight.bold,
+diff --git a/mobile_frontend/lib/providers/chat_provider.dart b/mobile_frontend/lib/providers/chat_provider.dart
+index 6df8d7f..5c4f171 100644
+--- a/mobile_frontend/lib/providers/chat_provider.dart
++++ b/mobile_frontend/lib/providers/chat_provider.dart
+@@ -10,12 +10,49 @@ class ChatProvider extends ChangeNotifier {
+   String? _myId;
+   String? _token;
+ 
++  // userId -> online/offline + last seen
++  final Map<String, bool> _onlineUsers = {};
++  final Map<String, DateTime?> _lastSeenAt = {};
++  // conversationId -> set of userIds currently typing in that room
++  final Map<String, Set<String>> _typingUsers = {};
++
++  bool isUserOnline(String userId) => _onlineUsers[userId] ?? false;
++  DateTime? lastSeenAt(String userId) => _lastSeenAt[userId];
++
++  bool isUserTyping(String conversationId, String userId) =>
++      _typingUsers[conversationId]?.contains(userId) ?? false;
++
+   void connectSocket(String token, String userId) {
+     _myId = userId;
+     _token = token;
+-    _socket.connect(token, _handleIncomingMessage);
++    _socket.connect(
++      token,
++      _handleIncomingMessage,
++      onTyping: (uid, conversationId) {
++        _typingUsers.putIfAbsent(conversationId, () => {}).add(uid);
++        notifyListeners();
++      },
++      onStopTyping: (uid, conversationId) {
++        _typingUsers[conversationId]?.remove(uid);
++        notifyListeners();
++      },
++      onUserOnline: (uid) {
++        _onlineUsers[uid] = true;
++        notifyListeners();
++      },
++      onUserOffline: (uid, lastSeenIso) {
++        _onlineUsers[uid] = false;
++        if (lastSeenIso != null) {
++          _lastSeenAt[uid] = DateTime.tryParse(lastSeenIso);
++        }
++        notifyListeners();
++      },
++    );
+   }
+ 
++  void startTyping(String conversationId) => _socket.startTyping(conversationId);
++  void stopTyping(String conversationId) => _socket.stopTyping(conversationId);
++
+   void _handleIncomingMessage(dynamic msg) {
+     print("📨 Provider handling message: $msg");
+     final conversationId = msg['conversationId'];
+diff --git a/mobile_frontend/lib/services/chat_socket.dart b/mobile_frontend/lib/services/chat_socket.dart
+index 3a0333e..b49534b 100644
+--- a/mobile_frontend/lib/services/chat_socket.dart
++++ b/mobile_frontend/lib/services/chat_socket.dart
+@@ -11,7 +11,19 @@ class ChatSocket {
+ 
+   // In chat_socket.dart
+   Function(dynamic)? _onMessage;
+-  void connect(String token, Function(dynamic) onMessage) {
++  Function(String userId, String conversationId)? _onTyping;
++  Function(String userId, String conversationId)? _onStopTyping;
++  Function(String userId)? _onUserOnline;
++  Function(String userId, String? lastSeenAt)? _onUserOffline;
++
++  void connect(
++    String token,
++    Function(dynamic) onMessage, {
++    Function(String userId, String conversationId)? onTyping,
++    Function(String userId, String conversationId)? onStopTyping,
++    Function(String userId)? onUserOnline,
++    Function(String userId, String? lastSeenAt)? onUserOffline,
++  }) {
+     if (_socket != null) {
+       _socket!.disconnect();
+       _socket = null;
+@@ -19,6 +31,10 @@ class ChatSocket {
+ 
+     if (isConnected) return;
+     _onMessage = onMessage;
++    _onTyping = onTyping;
++    _onStopTyping = onStopTyping;
++    _onUserOnline = onUserOnline;
++    _onUserOffline = onUserOffline;
+ 
+     _socket = IO.io(
+       'https://api.photobookhq.com',
+@@ -36,15 +52,28 @@ class ChatSocket {
+       onMessage.call(data);
+     });
+ 
+-    _socket!.onConnect((_) => print('✅ Socket connected'));
+-    _socket!.onDisconnect((_) => print('❌ Socket disconnected'));
+-    _socket!.onReconnect((_) {
+-      print("🔄 Socket reconnected");
++    _socket!.off('user:typing');
++    _socket!.on('user:typing', (data) {
++      _onTyping?.call(data['userId'], data['conversationId']);
++    });
+ 
+-      for (final room in _joinedRooms) {
+-        _socket!.emit('join_room', {'conversationId': room});
+-      }
++    _socket!.off('user:stop_typing');
++    _socket!.on('user:stop_typing', (data) {
++      _onStopTyping?.call(data['userId'], data['conversationId']);
++    });
++
++    _socket!.off('user:online');
++    _socket!.on('user:online', (data) {
++      _onUserOnline?.call(data['userId']);
++    });
++
++    _socket!.off('user:offline');
++    _socket!.on('user:offline', (data) {
++      _onUserOffline?.call(data['userId'], data['lastSeenAt']);
+     });
++
++    _socket!.onConnect((_) => print('✅ Socket connected'));
++    _socket!.onDisconnect((_) => print('❌ Socket disconnected'));
+     _socket!.onReconnect((_) {
+       print("🔄 Socket reconnected");
+ 
+@@ -56,6 +85,7 @@ class ChatSocket {
+   }
+ 
+   void joinRoom(String conversationId) {
++    _joinedRooms.add(conversationId);
+     if (!isConnected) {
+       print("⚠️ Socket not connected yet");
+       return;
+@@ -74,11 +104,22 @@ class ChatSocket {
+     );
+   }
+ 
++  void startTyping(String conversationId) {
++    if (!isConnected) return;
++    _socket!.emit('typing:start', {'conversationId': conversationId});
++  }
++
++  void stopTyping(String conversationId) {
++    if (!isConnected) return;
++    _socket!.emit('typing:stop', {'conversationId': conversationId});
++  }
++
+   void offMessage() {
+     _socket?.off('message');
+   }
+ 
+   void leaveRoom(String conversationId) {
++    _joinedRooms.remove(conversationId);
+     _socket?.emit('leave_room', {'conversationId': conversationId});
+   }
+ 
 diff --git a/mobile_frontend/lib/services/offer_service.dart b/mobile_frontend/lib/services/offer_service.dart
-index a2253c9..cf01ce1 100644
+index a2253c9..79d15c1 100644
 --- a/mobile_frontend/lib/services/offer_service.dart
 +++ b/mobile_frontend/lib/services/offer_service.dart
-@@ -31,6 +31,7 @@ class OfferService {
+@@ -7,6 +7,17 @@ import 'package:mobile_frontend/features/shared/offer.dart';
+ /// below only append "/offers...", not "/api/offers...".
+ const String _baseUrl = 'https://api.photobookhq.com/api';
+ 
++/// DateTime.now().toIso8601String() produces a *local* time with no
++/// timezone marker and microsecond precision (e.g.
++/// "2026-07-22T10:33:10.123456") — the backend wants strict UTC with
++/// no fractional seconds at all (e.g. "2026-08-01T00:00:00Z").
++String _isoUtc(DateTime dt) {
++  final iso = dt.toUtc().toIso8601String();
++  final dotIndex = iso.indexOf('.');
++  if (dotIndex == -1) return iso.endsWith('Z') ? iso : '${iso}Z';
++  return '${iso.substring(0, dotIndex)}Z';
++}
++
+ class OfferService {
+   Map<String, String> _headers(String token) => {
+         'Content-Type': 'application/json',
+@@ -31,6 +42,7 @@ class OfferService {
      String? sessionTime,
      String? locationType,
      String? locationText,
@@ -359,7 +1060,7 @@ index a2253c9..cf01ce1 100644
    }) async {
      final body = {
        'sentTo': sentTo,
-@@ -49,6 +50,12 @@ class OfferService {
+@@ -49,6 +61,12 @@ class OfferService {
        if (sessionTime != null) 'sessionTime': sessionTime,
        if (locationType != null) 'locationType': locationType,
        if (locationText != null) 'locationText': locationText,
@@ -368,11 +1069,11 @@ index a2253c9..cf01ce1 100644
 +      // documented. "expiresAt" matches the camelCase convention of every
 +      // other field here; if the server ignores it, expires_at will just
 +      // keep coming back null and this is the first thing to check.
-+      if (expiresAt != null) 'expiresAt': expiresAt.toIso8601String(),
++      if (expiresAt != null) 'expiresAt': _isoUtc(expiresAt),
      };
  
      final res = await http.post(
-@@ -97,6 +104,7 @@ class OfferService {
+@@ -97,6 +115,7 @@ class OfferService {
      required String token,
      required String id,
    }) async {
@@ -380,7 +1081,7 @@ index a2253c9..cf01ce1 100644
      final res = await http.patch(
        Uri.parse('$_baseUrl/offers/$id/accept'),
        headers: _headers(token),
-@@ -112,6 +120,7 @@ class OfferService {
+@@ -112,6 +131,7 @@ class OfferService {
      required String token,
      required String id,
    }) async {
@@ -388,7 +1089,7 @@ index a2253c9..cf01ce1 100644
      final res = await http.patch(
        Uri.parse('$_baseUrl/offers/$id/decline'),
        headers: _headers(token),
-@@ -126,6 +135,7 @@ class OfferService {
+@@ -126,6 +146,7 @@ class OfferService {
      required String token,
      required String id,
    }) async {
@@ -396,7 +1097,7 @@ index a2253c9..cf01ce1 100644
      final res = await http.patch(
        Uri.parse('$_baseUrl/offers/$id/cancel'),
        headers: _headers(token),
-@@ -135,6 +145,16 @@ class OfferService {
+@@ -135,6 +156,16 @@ class OfferService {
      }
    }
  

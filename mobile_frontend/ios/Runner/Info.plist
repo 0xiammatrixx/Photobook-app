@@ -35,6 +35,10 @@
 	<string>PhotoBook needs your location to show creatives near you</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>PhotoBook needs your location to show creatives near you</string>
+	<key>NSCameraUsageDescription</key>
+	<string>PhotoBook needs camera access for video calls</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>PhotoBook needs microphone access for voice and video calls</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
