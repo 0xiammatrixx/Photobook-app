@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_frontend/app/count_up_effect.dart';
+import 'package:mobile_frontend/app/skeleton.dart';
+import 'package:mobile_frontend/features/client_dashboard/HomeScreen/notifications_page.dart';
 import 'package:mobile_frontend/features/creative_dashboard/HomePage/model/booking_model.dart';
+import 'package:mobile_frontend/providers/notification_provider.dart';
 import 'package:mobile_frontend/providers/sessions_provider.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/services/authservice.dart';
@@ -26,6 +29,7 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
       if (token != null) {
         context.read<SessionsProvider>().loadSessions(token: token);
       }
+      context.read<NotificationProvider>().load();
     });
   }
 
@@ -61,22 +65,16 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
     ),
   ];
 
-  final List<Activity> activities = [
-    Activity(
-      message: "Pre-Wedding shoot with Tolu is completed",
-      time: "09:00 am",
-    ),
-    Activity(
-      message: "Clarence cancelled his birthday shoot",
-      time: "11:00 am",
-    ),
-    Activity(
-      message: "Tolu just paid for his pre-wedding shoot",
-      time: "07:00 pm",
-    ),
-  ];
-
   DateTime selectedDate = DateTime.now();
+
+  String _formatActivityTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return DateFormat('MMM d').format(dt);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -133,9 +131,7 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
               ),
               const SizedBox(height: 8),
               if (sessionsProvider.isLoading)
-                const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFFF7A33)),
-                )
+                const SkeletonListTile()
               else if (nextSession == null)
                 const Text(
                   "No upcoming bookings",
@@ -174,33 +170,71 @@ class _CreativeHomePageState extends State<CreativeHomePage> {
               const SizedBox(height: 20),
 
               // Recent Activity
-              Text(
-                "Recent Activity",
-                style: Theme.of(context).textTheme.titleMedium,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Recent Activity",
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      context.read<NotificationProvider>().load();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const NotificationsPage()),
+                      );
+                    },
+                    child: const Text(
+                      "See more",
+                      style: TextStyle(
+                          color: Color(0xFFFF7A33), fontSize: 13),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
-              Column(
-                children: activities
-                    .map(
-                      (a) => ListTile(
-                        tileColor: Color(0xFFF5F9F6),
+              Consumer<NotificationProvider>(
+                builder: (context, notif, _) {
+                  final items = notif.notifications.take(3).toList();
+                  if (items.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text("No recent activity",
+                          style: TextStyle(color: Colors.grey)),
+                    );
+                  }
+                  return Column(
+                    children: items.map((n) {
+                      return ListTile(
+                        tileColor: const Color(0xFFF5F9F6),
                         dense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                        leading: Icon(
-                          Icons.circle,
-                          size: 10,
-                          color: Colors.black,
-                        ),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 10),
+                        leading: Icon(n.icon, size: 18, color: n.color),
                         title: Text(
-                          a.message,
+                          n.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        trailing: Text(a.time),
-                      ),
-                    )
-                    .toList(),
+                        subtitle: Text(
+                          n.body,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              const TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        trailing: Text(
+                          _formatActivityTime(n.createdAt),
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey),
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
               ),
             ],
           ),

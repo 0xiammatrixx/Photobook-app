@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ── Notifications ──────────────────────────────────────────────────────────
 
@@ -11,12 +12,37 @@ class NotificationsPage extends StatefulWidget {
 class _NotificationsPageState extends State<NotificationsPage> {
   bool _pushEnabled = true;
   bool _emailEnabled = true;
-  bool _pushChat = true;
-  bool _pushPromo = false;
-  bool _pushUpdates = false;
-  bool _emailChat = true;
-  bool _emailPromo = true;
-  bool _emailUpdates = false;
+  // Which sub-categories are checked (persisted to SharedPreferences)
+  String? _pushCategory;
+  String? _emailCategory;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _pushEnabled = prefs.getBool('notif_push_enabled') ?? true;
+      _emailEnabled = prefs.getBool('notif_email_enabled') ?? true;
+      _pushCategory = prefs.getString('notif_push_category') ?? 'chat';
+      _emailCategory = prefs.getString('notif_email_category') ?? 'chat';
+    });
+  }
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notif_push_enabled', _pushEnabled);
+    await prefs.setBool('notif_email_enabled', _emailEnabled);
+    if (_pushCategory != null) {
+      await prefs.setString('notif_push_category', _pushCategory!);
+    }
+    if (_emailCategory != null) {
+      await prefs.setString('notif_email_category', _emailCategory!);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,33 +55,53 @@ class _NotificationsPageState extends State<NotificationsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _sectionHeader('Push Notifications'),
-            _toggleRow('Push Notifications', _pushEnabled,
-                (v) => setState(() => _pushEnabled = v)),
+            _toggleRow('Push Notifications', _pushEnabled, (v) {
+              setState(() => _pushEnabled = v);
+              _save();
+            }),
             if (_pushEnabled) ...[
               const Padding(
                 padding: EdgeInsets.only(left: 4, top: 8, bottom: 4),
                 child: Text('Enable for',
-                    style:
-                        TextStyle(fontSize: 12, color: Colors.grey)),
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
               ),
-              _radioRow('Chat Messages', '_pushChat', true),
-              _radioRow('Promotions', '_pushPromo', false),
-              _radioRow('App Updates', '_pushUpdates', false),
+              _radioRow('Chat Messages', 'chat', _pushCategory, (v) {
+                setState(() => _pushCategory = v);
+                _save();
+              }),
+              _radioRow('Promotions', 'promo', _pushCategory, (v) {
+                setState(() => _pushCategory = v);
+                _save();
+              }),
+              _radioRow('App Updates', 'updates', _pushCategory, (v) {
+                setState(() => _pushCategory = v);
+                _save();
+              }),
             ],
             const SizedBox(height: 24),
             _sectionHeader('Email Notifications'),
-            _toggleRow('Email Notifications', _emailEnabled,
-                (v) => setState(() => _emailEnabled = v)),
+            _toggleRow('Email Notifications', _emailEnabled, (v) {
+              setState(() => _emailEnabled = v);
+              _save();
+            }),
             if (_emailEnabled) ...[
               const Padding(
                 padding: EdgeInsets.only(left: 4, top: 8, bottom: 4),
                 child: Text('Enable for',
-                    style:
-                        TextStyle(fontSize: 12, color: Colors.grey)),
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
               ),
-              _radioRow('Chat Messages', '_emailChat', true),
-              _radioRow('Promotions', '_emailPromo', true),
-              _radioRow('App Updates', '_emailUpdates', false),
+              _radioRow('Chat Messages', 'chat', _emailCategory, (v) {
+                setState(() => _emailCategory = v);
+                _save();
+              }),
+              _radioRow('Promotions', 'promo', _emailCategory, (v) {
+                setState(() => _emailCategory = v);
+                _save();
+              }),
+              _radioRow('App Updates', 'updates', _emailCategory, (v) {
+                setState(() => _emailCategory = v);
+                _save();
+              }),
             ],
           ],
         ),
@@ -83,12 +129,18 @@ class _NotificationsPageState extends State<NotificationsPage> {
         ],
       );
 
-  Widget _radioRow(String label, String key, bool selected) => Row(
+  Widget _radioRow(
+    String label,
+    String value,
+    String? groupValue,
+    void Function(String) onChanged,
+  ) =>
+      Row(
         children: [
           Radio<String>(
-            value: key,
-            groupValue: selected ? key : '',
-            onChanged: (_) {},
+            value: value,
+            groupValue: groupValue,
+            onChanged: (v) => onChanged(v!),
             activeColor: const Color(0xFFFF7A33),
           ),
           Text(label, style: const TextStyle(fontSize: 13)),

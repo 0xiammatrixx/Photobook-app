@@ -7,8 +7,13 @@ class ChatProvider extends ChangeNotifier {
   final _service = ChatService();
   final _socket = ChatSocket();
   bool get isSocketConnected => _socket.isConnected;
+  bool get isSocketConnecting => _socket.isConnecting;
   String? _myId;
   String? _token;
+
+  /// Invoked when a message arrives from another user (not my own). Set from
+  /// the app root to surface an in-app banner / notification.
+  void Function(Map<String, dynamic> message)? onIncomingMessage;
 
   // userId -> online/offline + last seen
   final Map<String, bool> _onlineUsers = {};
@@ -21,6 +26,21 @@ class ChatProvider extends ChangeNotifier {
 
   bool isUserTyping(String conversationId, String userId) =>
       _typingUsers[conversationId]?.contains(userId) ?? false;
+
+  /// Fallback: get the timestamp of the last message sent BY this user
+  /// in the given conversation. Used when the server hasn't emitted a
+  /// user:offline event yet (e.g. you connected after they went offline).
+  DateTime? lastMessageFrom(String conversationId, String userId) {
+    final msgs = _messages[conversationId];
+    if (msgs == null || msgs.isEmpty) return null;
+    for (var i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i]['senderId'] == userId) {
+        final ts = msgs[i]['createdAt'];
+        if (ts != null) return DateTime.tryParse(ts);
+      }
+    }
+    return null;
+  }
 
   void connectSocket(String token, String userId) {
     _myId = userId;
@@ -37,13 +57,23 @@ class ChatProvider extends ChangeNotifier {
         notifyListeners();
       },
       onUserOnline: (uid) {
+        print('🟢 [ChatProvider] user online: $uid');
         _onlineUsers[uid] = true;
         notifyListeners();
       },
       onUserOffline: (uid, lastSeenIso) {
+        print('🔴 [ChatProvider] user offline: $uid, lastSeenIso=$lastSeenIso');
         _onlineUsers[uid] = false;
-        if (lastSeenIso != null) {
-          _lastSeenAt[uid] = DateTime.tryParse(lastSeenIso);
+        if (lastSeenIso != null && lastSeenIso.isNotEmpty) {
+          final parsed = DateTime.tryParse(lastSeenIso);
+          if (parsed != null) {
+            _lastSeenAt[uid] = parsed;
+            print('🔴 [ChatProvider] last seen parsed: $parsed');
+          } else {
+            print('🔴 [ChatProvider] last seen parse FAILED for: $lastSeenIso');
+          }
+        } else {
+          print('🔴 [ChatProvider] no lastSeenAt in offline event');
         }
         notifyListeners();
       },
@@ -76,6 +106,13 @@ class ChatProvider extends ChangeNotifier {
     }
 
     notifyListeners(); // ✅ updates chat list, nav badge, everything
+
+    // Surface an in-app banner for messages from other users so the user is
+    // alerted even when they're not looking at this conversation.
+    final senderId = msg['senderId'];
+    if (senderId != null && senderId != _myId) {
+      onIncomingMessage?.call(Map<String, dynamic>.from(msg));
+    }
   }
 
   List<dynamic> _conversations = [];

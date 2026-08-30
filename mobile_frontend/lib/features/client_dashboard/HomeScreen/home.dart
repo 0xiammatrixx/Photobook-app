@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:mobile_frontend/app/skeleton.dart';
 import 'package:mobile_frontend/features/client_dashboard/HomeScreen/notifications_page.dart';
 import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profilepage.dart';
+import 'package:mobile_frontend/providers/location_provider.dart';
+import 'package:mobile_frontend/providers/notification_provider.dart';
 import 'package:mobile_frontend/providers/search_provider.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
+import 'package:mobile_frontend/services/location_service.dart';
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -19,20 +23,26 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   bool _showDropdown = false;
-  GoogleMapController? _mapController;
+  MapController? _mapController;
   LatLng? _currentPosition;
 
-  // Categories with placeholder colors until you add images
-  final List<Map<String, dynamic>> _categories = [
-    {'label': 'Photographers', 'color': Color(0xFFFFE0CC), 'icon': Icons.camera_alt_outlined},
-    {'label': 'Videographers', 'color': Color(0xFFE8F5E9), 'icon': Icons.videocam_outlined},
-    {'label': 'Content Creators', 'color': Color(0xFFE3F2FD), 'icon': Icons.phone_android_outlined},
-    {'label': 'Weddings', 'color': Color(0xFFFCE4EC), 'icon': Icons.favorite_outline},
-    {'label': 'Birthdays', 'color': Color(0xFFFFF9C4), 'icon': Icons.cake_outlined},
-    {'label': 'Products', 'color': Color(0xFFF3E5F5), 'icon': Icons.inventory_2_outlined},
-    {'label': 'Headshots', 'color': Color(0xFFE0F7FA), 'icon': Icons.portrait_outlined},
-    {'label': 'Events', 'color': Color(0xFFFFF3E0), 'icon': Icons.event_outlined},
-    {'label': 'Editorial', 'color': Color(0xFFEDE7F6), 'icon': Icons.auto_stories_outlined},
+  // What are you looking for? — only these three
+  final List<Map<String, String>> _services = [
+    {
+      'title': 'Photographers',
+      'subtitle': 'Capture your special memories.',
+      'image': 'assets/Photographers.png',
+    },
+    {
+      'title': 'Videographers',
+      'subtitle': 'Bring your stories to life.',
+      'image': 'assets/Videographers.png',
+    },
+    {
+      'title': 'Content Creators',
+      'subtitle': 'Create content that stands out.',
+      'image': 'assets/ContentCreator.png',
+    },
   ];
 
   @override
@@ -57,7 +67,15 @@ class _HomeScreenState extends State<HomeScreen> {
       if (permission == LocationPermission.deniedForever) return;
 
       final pos = await Geolocator.getCurrentPosition();
-      setState(() => _currentPosition = LatLng(pos.latitude, pos.longitude));
+      final loc = LatLng(pos.latitude, pos.longitude);
+      setState(() => _currentPosition = loc);
+
+      // Load nearby creatives + resolve city name
+      if (mounted) {
+        final locProvider = context.read<LocationProvider>();
+        locProvider.resolveCityName(pos.latitude, pos.longitude);
+        locProvider.loadNearby(lat: pos.latitude, lng: pos.longitude);
+      }
     } catch (e) {
       // fallback — Abuja coords
       setState(() => _currentPosition = const LatLng(9.0765, 7.3986));
@@ -93,38 +111,64 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Hello $firstname,",
+                        "Hi, $firstname 👋",
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const Text(
-                        "Abuja, Nigeria",
-                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                        "Find and book the perfect creative for\nyour next unforgettable moment.",
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                      Consumer<LocationProvider>(
+                        builder: (_, loc, __) => Text(
+                          loc.currentCity ?? 'Loading location...',
+                          style: const TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
                       ),
                     ],
                   ),
                   // Notifications bell
                   GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const NotificationsPage()),
-                    ),
+                    onTap: () {
+                      context.read<NotificationProvider>().load();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const NotificationsPage()),
+                      );
+                    },
                     child: Stack(
                       children: [
                         const Icon(Icons.notifications_outlined, size: 28),
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFFF7A33),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
+                        Consumer<NotificationProvider>(
+                          builder: (_, notif, __) {
+                            if (notif.unreadCount == 0) {
+                              return const SizedBox.shrink();
+                            }
+                            return Positioned(
+                              right: 0,
+                              top: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFFF7A33),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  notif.unreadCount > 9
+                                      ? '9+'
+                                      : '${notif.unreadCount}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -137,39 +181,30 @@ class _HomeScreenState extends State<HomeScreen> {
               _buildSearchBar(),
               const SizedBox(height: 20),
 
-              // Find the Right Creative Service
+              // What are you looking for?
               const Text(
-                "Find The Right Creative Service",
+                "What are you looking for?",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const Text(
-                "What service are you looking for?",
-                style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
               const SizedBox(height: 12),
               SizedBox(
-                height: 110,
+                height: 100,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  itemCount: _categories.length,
-                  itemBuilder: (context, index) {
-                    final cat = _categories[index];
-                    return _CategoryCard(
-                      label: cat['label'],
-                      color: cat['color'],
-                      icon: cat['icon'],
-                    );
-                  },
+                  itemCount: _services.length,
+                  itemBuilder: (context, index) => _ServiceCard(
+                    image: _services[index]['image']!,
+                  ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
 
-              // Top Recommendations
+              // Available Near You
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    "Top Recommendations",
+                    "Available Near You",
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   TextButton(
@@ -182,28 +217,58 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              Consumer<SearchProvider>(
-                builder: (context, searchProvider, _) {
-                  if (searchProvider.isLoading) {
-                    return const SizedBox(
-                      height: 180,
-                      child: Center(child: CircularProgressIndicator(color: Color(0xFFFF7A33))),
+              Consumer<LocationProvider>(
+                builder: (context, locProvider, _) {
+                  if (locProvider.isLoading) {
+                    return SizedBox(
+                      height: 200,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: 3,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(width: 12),
+                        itemBuilder: (_, __) => const SkeletonPulse(
+                          child: SkeletonBox(
+                            width: 140,
+                            height: 200,
+                            radius: 14,
+                          ),
+                        ),
+                      ),
                     );
                   }
-                  final photographers = searchProvider.topPhotographers;
-                  if (photographers.isEmpty) {
-                    return const SizedBox(
+                  final nearby = locProvider.nearbyCreatives;
+                  if (nearby.isEmpty) {
+                    return SizedBox(
                       height: 180,
-                      child: Center(child: Text("No recommendations yet")),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.location_off, size: 40, color: Colors.grey.shade400),
+                            const SizedBox(height: 8),
+                            const Text(
+                              "No creatives nearby yet",
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                            const Text(
+                              "Enable location sharing to see creatives near you",
+                              style: TextStyle(color: Colors.grey, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
                     );
                   }
                   return SizedBox(
                     height: 200,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
-                      itemCount: photographers.length > 10 ? 10 : photographers.length,
+                      itemCount: nearby.length > 10 ? 10 : nearby.length,
                       itemBuilder: (context, index) {
-                        return _PhotographerCard(photographer: photographers[index]);
+                        final c = nearby[index];
+                        return _NearbyCard(creative: c);
                       },
                     ),
                   );
@@ -211,45 +276,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Browse by Category
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Browse by Category",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text(
-                      "See all",
-                      style: TextStyle(color: Color(0xFFFF7A33), fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 90,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _categories.length,
-                  itemBuilder: (context, index) {
-                    final cat = _categories[index];
-                    return _CategoryCircle(
-                      label: cat['label'],
-                      color: cat['color'],
-                      icon: cat['icon'],
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Find Creatives Nearby
+              // Explore Creatives Around You
               const Text(
-                "Find Creatives Nearby",
+                "Explore Creatives Around You",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const Text(
+                "See who's ready and how far they are.",
+                style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
               const SizedBox(height: 10),
               ClipRRect(
@@ -257,28 +291,117 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: SizedBox(
                   height: 220,
                   child: _currentPosition == null
-                      ? Container(
-                          color: Colors.grey.shade200,
-                          child: const Center(
-                            child: CircularProgressIndicator(color: Color(0xFFFF7A33)),
+                      ? const SkeletonPulse(
+                          child: SkeletonBox(
+                            width: double.infinity,
+                            height: double.infinity,
+                            radius: 0,
                           ),
                         )
-                      : GoogleMap(
-                          initialCameraPosition: CameraPosition(
-                            target: _currentPosition!,
-                            zoom: 13,
-                          ),
-                          myLocationEnabled: true,
-                          myLocationButtonEnabled: false,
-                          zoomControlsEnabled: false,
-                          onMapCreated: (controller) => _mapController = controller,
-                          // Creative pins will go here once location is stored
-                          markers: {
-                            Marker(
-                              markerId: const MarkerId('me'),
-                              position: _currentPosition!,
-                              infoWindow: const InfoWindow(title: 'You are here'),
-                            ),
+                      : Consumer<LocationProvider>(
+                          builder: (_, locProvider, __) {
+                            final markers = <Marker>[
+                              Marker(
+                                point: _currentPosition!,
+                                width: 28,
+                                height: 28,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.white, width: 2),
+                                  ),
+                                ),
+                              ),
+                              for (final c in locProvider.nearbyCreatives)
+                                Marker(
+                                  point: LatLng(c.latitude, c.longitude),
+                                  width: 36,
+                                  height: 36,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => CreativeProfilePage(
+                                            isOwner: false,
+                                            creativeId: c.userId,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: const Icon(
+                                      Icons.location_pin,
+                                      color: Color(0xFFFF7A33),
+                                      size: 36,
+                                    ),
+                                  ),
+                                ),
+                            ];
+                            return Stack(
+                              children: [
+                                FlutterMap(
+                                  mapController: _mapController,
+                                  options: MapOptions(
+                                    initialCenter: _currentPosition!,
+                                    initialZoom: 13,
+                                  ),
+                                  children: [
+                                    TileLayer(
+                                      urlTemplate:
+                                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                      userAgentPackageName:
+                                          'com.example.mobile_frontend',
+                                    ),
+                                    MarkerLayer(markers: markers),
+                                  ],
+                                ),
+                                if (locProvider.nearbyCreatives.isNotEmpty)
+                                  Positioned(
+                                    left: 10,
+                                    bottom: 10,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius:
+                                            BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.15),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            '${locProvider.nearbyCreatives.length} creatives nearby',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          const Text(
+                                            'Within 45mins drive',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
                           },
                         ),
                 ),
@@ -423,105 +546,57 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// Category card (horizontal scroll service type)
-class _CategoryCard extends StatelessWidget {
-  final String label;
-  final Color color;
-  final IconData icon;
+// "What are you looking for?" card — horizontal tile, the whole card IS
+// the image (text is baked into the asset), same size as Hub category tiles.
+class _ServiceCard extends StatelessWidget {
+  final String image;
 
-  const _CategoryCard({required this.label, required this.color, required this.icon});
+  const _ServiceCard({required this.image});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 130,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 28, color: Colors.black87),
-          const Spacer(),
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          ),
-          const SizedBox(height: 2),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text("Explore", style: TextStyle(fontSize: 10, color: Colors.grey)),
-              Container(
-                width: 22,
-                height: 22,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFF7A33),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.arrow_forward, size: 12, color: Colors.white),
+    return GestureDetector(
+      onTap: () {
+        // TODO: navigate to category results
+      },
+      child: Container(
+        width: 130,
+        margin: const EdgeInsets.only(right: 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.asset(
+            image,
+            width: 130,
+            height: 100,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              color: const Color(0xFFFFE0CC),
+              child: const Center(
+                child: Icon(Icons.image, color: Colors.grey),
               ),
-            ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-// Category circle (browse section)
-class _CategoryCircle extends StatelessWidget {
-  final String label;
-  final Color color;
-  final IconData icon;
-
-  const _CategoryCircle({required this.label, required this.color, required this.icon});
+// Nearby creative card — shows distance
+class _NearbyCard extends StatelessWidget {
+  final NearbyCreative creative;
+  const _NearbyCard({required this.creative});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 72,
-      margin: const EdgeInsets.only(right: 12),
-      child: Column(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: Icon(icon, size: 24, color: Colors.black87),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 10),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PhotographerCard extends StatelessWidget {
-  final Map<String, dynamic> photographer;
-  const _PhotographerCard({required this.photographer});
-
-  @override
-  Widget build(BuildContext context) {
-    final name = photographer['business_name'] ?? photographer['name'] ?? 'Unknown';
-    final avatarUrl = photographer['photographer_profile_photo_url'] ?? photographer['avatarUrl'];
-    final rating = double.tryParse(photographer['star_rating']?.toString() ?? '0') ?? 0.0;
-    final id = photographer['id'] ?? photographer['user_id'] ?? '';
-    final displayTitle = photographer['display_title'] ?? 'Photographer';
+    final name = creative.name ?? 'Creative';
+    final role = creative.role ?? 'photographer';
+    final km = creative.distanceKm;
 
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => CreativeProfilePage(isOwner: false, creativeId: id),
+        builder: (_) => CreativeProfilePage(
+            isOwner: false, creativeId: creative.userId),
       )),
       child: Container(
         width: 140,
@@ -533,33 +608,54 @@ class _PhotographerCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-              child: avatarUrl != null
-                  ? Image.network(avatarUrl, width: double.infinity, height: 100, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Image.asset('assets/profileplaceholder.png',
-                          width: double.infinity, height: 100, fit: BoxFit.cover))
-                  : Image.asset('assets/profileplaceholder.png', width: double.infinity, height: 100, fit: BoxFit.cover),
+            // Avatar placeholder
+            Container(
+              height: 100,
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+                color: Color(0xFFE8F5E9),
+              ),
+              child: const Center(
+                child: Icon(Icons.person, size: 48, color: Colors.grey),
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(displayTitle, style: const TextStyle(fontSize: 10, color: Colors.grey),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: List.generate(5, (i) => Icon(
-                      i < rating.round() ? Icons.star : Icons.star_border,
-                      size: 12, color: Colors.orange,
-                    )),
+                  Text(name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    role == 'photographer' ? 'Photographer' : role,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 4),
+                  if (km != null)
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on,
+                            size: 12, color: Color(0xFFFF7A33)),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${km.toStringAsFixed(1)} km',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFFFF7A33),
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 4),
                   TextButton(
                     onPressed: () => Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => CreativeProfilePage(isOwner: false, creativeId: id),
+                      builder: (_) => CreativeProfilePage(
+                          isOwner: false, creativeId: creative.userId),
                     )),
                     style: TextButton.styleFrom(
                       padding: EdgeInsets.zero,
@@ -567,7 +663,8 @@ class _PhotographerCard extends StatelessWidget {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     child: const Text("View Profile",
-                        style: TextStyle(fontSize: 10, color: Color(0xFFFF7A33))),
+                        style: TextStyle(
+                            fontSize: 10, color: Color(0xFFFF7A33))),
                   ),
                 ],
               ),

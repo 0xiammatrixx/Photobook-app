@@ -47,8 +47,9 @@ class RateCardItem {
 
       description: json["description"] ?? "",
       categories: List<String>.from(json["categories"] ?? []),
-      whatsIncluded: List<String>.from(json["whatsIncluded"] ?? []),
-      deliveryTime: json["deliveryTime"] ?? "",
+      whatsIncluded: List<String>.from(
+          (json["whats_included"] ?? json["whatsIncluded"]) ?? []),
+      deliveryTime: (json["delivery_time"] ?? json["deliveryTime"] ?? "") as String,
     );
   }
 }
@@ -66,6 +67,23 @@ class RateCardProvider extends ChangeNotifier {
     try {
       final data = await _service.getMyRateCard(token: token);
       print("📦 Raw rate card response: $data");
+      _services = data.map((e) => RateCardItem.fromJson(e)).toList();
+    } catch (e) {
+      print("❌ Failed to load rate card: $e");
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Load a specific photographer's public rate card (client view).
+  Future<void> loadPhotographerRateCard({
+    required String photographerId,
+  }) async {
+    isLoading = true;
+    notifyListeners();
+    try {
+      final data = await _service.getPhotographerRateCard(photographerId);
       _services = data.map((e) => RateCardItem.fromJson(e)).toList();
     } catch (e) {
       print("❌ Failed to load rate card: $e");

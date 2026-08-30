@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mobile_frontend/features/auth/roleSelection.dart';
+import 'package:mobile_frontend/features/shared/two_factor_verify_screen.dart';
 import 'package:mobile_frontend/providers/chat_provider.dart';
 import 'package:mobile_frontend/services/authservice.dart';
+import 'package:mobile_frontend/services/push_notification_service.dart';
 import 'package:mobile_frontend/app/buttons.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/passwordresetscreen.dart';
@@ -37,43 +39,61 @@ class _LoginFormState extends State<LoginForm> {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    final user = await _authService.login(
-      email,
-      password,
-    ); // now returns Map or null
+    final result = await _authService.login(email, password);
 
     setState(() => isLoading = false);
-
     if (!mounted) return;
 
-    if (user != null) {
-      Provider.of<UserProvider>(
-        context,
-        listen: false,
-      ).setUser(user, user['token']);
-      context.read<ChatProvider>().connectSocket(
-        user['token'],
-        user['id'], // ✅
-      );
+    switch (result) {
+      case LoginSuccess(:final user, :final token):
+        _navigateAfterAuth(user, token);
 
-      final role = user['role'] ?? 'client'; // default to client if null
-      Widget nextPage;
+      case LoginRequires2FA(:final tempToken):
+        // Push 2FA verify screen — it calls onVerified with real token+user
+        final verified = await Navigator.push<Map<String, dynamic>>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TwoFactorVerifyScreen(
+              tempToken: tempToken,
+              onVerified: (data) {
+                // Pop and pass data back
+                Navigator.pop(context, data);
+              },
+            ),
+          ),
+        );
+        if (verified != null && mounted) {
+          final user = verified['user'] ?? verified;
+          final token = verified['token'] ?? '';
+          user['token'] = token;
+          await AuthService().saveAuthData(token, user is Map<String, dynamic> ? user : {});
+          _navigateAfterAuth(user is Map<String, dynamic> ? user : {'token': token}, token);
+        }
 
-      if (role == 'photographer') {
-        nextPage = CreativeBottomTabs(); // your creative dashboard
-      } else {
-        nextPage = BottomTabs(); // your client dashboard
-      }
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => nextPage),
-      );
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid credentials')));
+      case null:
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invalid credentials')),
+          );
+        }
     }
+  }
+
+  void _navigateAfterAuth(Map<String, dynamic> user, String token) {
+    Provider.of<UserProvider>(context, listen: false).setUser(user, token);
+    context.read<ChatProvider>().connectSocket(token, user['id'] ?? '');
+    // Register this device for push notifications now that we're logged in.
+    PushNotificationService().registerCurrentToken();
+
+    final role = user['role'] ?? 'client';
+    final nextPage = role == 'photographer'
+        ? const CreativeBottomTabs()
+        : const BottomTabs();
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => nextPage),
+    );
   }
 
   Future<void> _logInWithGoogle() async {
@@ -90,6 +110,8 @@ class _LoginFormState extends State<LoginForm> {
           user['token'],
           user['id'], // ✅
         );
+        // Register this device for push notifications.
+        PushNotificationService().registerCurrentToken();
 
         final role = user['role']?.toString().toLowerCase();
         Widget nextPage;
@@ -172,15 +194,6 @@ class _LoginFormState extends State<LoginForm> {
           Row(
             children: [
               Checkbox(
-                fillColor: MaterialStateProperty.resolveWith<Color>((
-                  Set<WidgetState> states,
-                ) {
-                  if (states.contains(WidgetState.disabled)) {
-                    return Colors.white.withOpacity(.32);
-                  }
-                  return Colors.white;
-                }),
-                checkColor: Colors.black,
                 value: _showPassword,
                 onChanged: (value) {
                   setState(() {
@@ -198,7 +211,11 @@ class _LoginFormState extends State<LoginForm> {
           SizedBox(
             width: double.infinity,
             height: 50,
-            child: CustomButton(onPressed: _handleLogin, text: 'Continue'),
+            child: CustomButton(
+              onPressed: _handleLogin,
+              text: 'Continue',
+              loading: isLoading,
+            ),
           ),
 
           const SizedBox(height: 24),
@@ -261,15 +278,25 @@ class _LoginFormState extends State<LoginForm> {
             width: double.infinity,
             height: 50,
             child: OutlinedButton.icon(
-              onPressed: _logInWithGoogle,
+              onPressed: isLoading ? null : _logInWithGoogle,
               style: OutlinedButton.styleFrom(
                 backgroundColor: Color(0xFFEEEEEE),
+                disabledBackgroundColor: Color(0xFFEEEEEE),
                 side: BorderSide(color: Color(0xFFEEEEEE)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              icon: SvgPicture.asset('assets/googleicon.svg', height: 20),
+              icon: isLoading
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF181818),
+                      ),
+                    )
+                  : SvgPicture.asset('assets/googleicon.svg', height: 20),
               label: const Text(
                 'Login with Google',
                 style: TextStyle(

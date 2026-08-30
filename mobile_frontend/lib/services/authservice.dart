@@ -12,14 +12,16 @@ class AuthService {
   );
 
   /// Save token + user locally
-  Future<void> _saveAuthData(String token, Map<String, dynamic> user) async {
+  Future<void> saveAuthData(String token, Map<String, dynamic> user) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', token);
     await prefs.setString('user', jsonEncode(user));
   }
 
-  /// Login with email + password
-  Future<Map<String, dynamic>?> login(String email, String password) async {
+  /// Login with email + password.
+  /// Returns [LoginSuccess] with user data, [LoginRequires2FA] if 2FA is
+  /// needed, or null on invalid credentials.
+  Future<LoginResult?> login(String email, String password) async {
     final res = await http.post(
       Uri.parse('$baseUrl/login'),
       headers: {'Content-Type': 'application/json'},
@@ -28,10 +30,18 @@ class AuthService {
 
     if (res.statusCode == 200 || res.statusCode == 201) {
       final data = jsonDecode(res.body);
+
+      // 2FA required — backend returns temp token, no user yet
+      if (data['requires2FA'] == true || data['tempToken'] != null) {
+        return LoginRequires2FA(
+          tempToken: data['tempToken'] ?? data['token'],
+        );
+      }
+
       final user = data['user'];
       user['token'] = data['token'];
-      await _saveAuthData(data['token'], data['user']);
-      return data['user']; // return user map
+      await saveAuthData(data['token'], data['user']);
+      return LoginSuccess(user: data['user'], token: data['token']);
     } else {
       print('Login failed: ${res.body}');
       return null;
@@ -138,7 +148,7 @@ class AuthService {
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         final data = jsonDecode(res.body);
-        await _saveAuthData(data['token'], data['user']);
+        await saveAuthData(data['token'], data['user']);
         return data; // ✅ return full data so caller can read role
       } else {
         print('Google login failed: ${res.body}');
@@ -220,4 +230,193 @@ class AuthService {
       return false;
     }
   }
+
+  // ──────────────────────────────────────────────
+  //  Password Reset
+  // ──────────────────────────────────────────────
+
+  /// POST /api/auth/password-reset/request
+  Future<PasswordResetResult> requestPasswordReset(String email) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/password-reset/request'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+      if (res.statusCode == 200) return PasswordResetResult.success;
+      if (res.statusCode == 404) return PasswordResetResult.userNotFound;
+      return PasswordResetResult.error;
+    } catch (e) {
+      print('❌ requestPasswordReset error: $e');
+      return PasswordResetResult.error;
+    }
+  }
+
+  /// POST /api/auth/password-reset/confirm
+  Future<PasswordResetResult> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/password-reset/confirm'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'code': code,
+          'newPassword': newPassword,
+        }),
+      );
+      if (res.statusCode == 200) return PasswordResetResult.success;
+      if (res.statusCode == 400) return PasswordResetResult.invalidCode;
+      if (res.statusCode == 404) return PasswordResetResult.userNotFound;
+      return PasswordResetResult.error;
+    } catch (e) {
+      print('❌ confirmPasswordReset error: $e');
+      return PasswordResetResult.error;
+    }
+  }
+
+  /// PATCH /api/auth/change-password — change password while authenticated.
+  Future<({bool success, String message})> changePassword({
+    required String token,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final res = await http.patch(
+        Uri.parse('$baseUrl/change-password'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+          'confirmNewPassword': newPassword,
+        }),
+      );
+      print('🔑 changePassword [${res.statusCode}]: ${res.body}');
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return (success: true, message: 'Password changed successfully');
+      }
+      // Try to extract the backend's error message
+      String msg = 'Failed to change password.';
+      try {
+        final body = jsonDecode(res.body);
+        msg = body['message'] ?? body['error'] ?? msg;
+      } catch (_) {}
+      return (success: false, message: msg);
+    } catch (e) {
+      print('❌ changePassword error: $e');
+      return (success: false, message: 'Network error. Please try again.');
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  //  2FA
+  // ──────────────────────────────────────────────
+
+  /// POST /api/auth/2fa/setup — returns { secret, qrCodeUrl, backupCodes }
+  Future<Map<String, dynamic>?> setup2FA(String token) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/2fa/setup'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (res.statusCode == 200) return jsonDecode(res.body);
+      print('❌ setup2FA failed [${res.statusCode}]: ${res.body}');
+      return null;
+    } catch (e) {
+      print('❌ setup2FA error: $e');
+      return null;
+    }
+  }
+
+  /// POST /api/auth/2fa/confirm
+  Future<bool> confirm2FA({
+    required String token,
+    required String totpToken,
+    required String secret,
+    required List<String> backupCodes,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/2fa/confirm'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'token': totpToken,
+          'secret': secret,
+          'backupCodes': backupCodes,
+        }),
+      );
+      return res.statusCode == 200;
+    } catch (e) {
+      print('❌ confirm2FA error: $e');
+      return false;
+    }
+  }
+
+  /// DELETE /api/auth/2fa/disable
+  Future<bool> disable2FA(String token) async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$baseUrl/2fa/disable'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      return res.statusCode == 200;
+    } catch (e) {
+      print('❌ disable2FA error: $e');
+      return false;
+    }
+  }
+
+  /// POST /api/auth/2fa/verify — used during login
+  Future<Map<String, dynamic>?> verify2FA({
+    required String token,
+    String? backupCode,
+  }) async {
+    try {
+      final body = <String, dynamic>{'token': token};
+      if (backupCode != null) body['backupCode'] = backupCode;
+
+      final res = await http.post(
+        Uri.parse('$baseUrl/2fa/verify'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      if (res.statusCode == 200) return jsonDecode(res.body);
+      print('❌ verify2FA failed [${res.statusCode}]: ${res.body}');
+      return null;
+    } catch (e) {
+      print('❌ verify2FA error: $e');
+      return null;
+    }
+  }
+}
+
+enum PasswordResetResult { success, invalidCode, userNotFound, error }
+
+// ── Login result types ──
+sealed class LoginResult {}
+
+class LoginSuccess extends LoginResult {
+  final Map<String, dynamic> user;
+  final String token;
+  LoginSuccess({required this.user, required this.token});
+}
+
+class LoginRequires2FA extends LoginResult {
+  final String tempToken;
+  LoginRequires2FA({required this.tempToken});
 }

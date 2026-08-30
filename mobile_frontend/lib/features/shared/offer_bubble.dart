@@ -64,6 +64,7 @@ class OfferBubble extends StatelessWidget {
           payload: payload,
           offeredByName: counterpartyName,
           offeredByAvatarUrl: counterpartyAvatarUrl,
+          offeredById: recipientId,
         ),
       ),
     );

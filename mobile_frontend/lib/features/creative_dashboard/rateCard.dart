@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:mobile_frontend/features/client_dashboard/BookScreen/book.dart';
 import 'package:mobile_frontend/features/shared/chat_conversation_screen.dart';
 import 'package:mobile_frontend/providers/chat_provider.dart';
+import 'package:mobile_frontend/providers/location_provider.dart';
 import 'package:mobile_frontend/providers/ratecard_provider.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
+import 'package:mobile_frontend/services/location_service.dart';
 import 'package:provider/provider.dart';
 
 class RateCardPage extends StatefulWidget {
@@ -44,17 +47,41 @@ class RateCardPage extends StatefulWidget {
 
 class _RateCardPageState extends State<RateCardPage> {
   int? _expandedIndex;
+  String? _creativeCity;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadRateCard());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _loadRateCard();
+      try {
+        if (widget.isOwner) {
+          final pos = await Geolocator.getCurrentPosition();
+          final city = await LocationProvider.cityFromCoords(pos.latitude, pos.longitude);
+          if (mounted) setState(() => _creativeCity = city);
+        } else if (widget.creativeId != null && widget.creativeId!.isNotEmpty) {
+          final loc = await LocationService().getUserLocation(widget.creativeId!);
+          if (loc != null && mounted) {
+            final city = await LocationProvider.cityFromCoords(loc.latitude, loc.longitude);
+            if (mounted) setState(() => _creativeCity = city);
+          }
+        }
+      } catch (_) {}
+    });
   }
 
   Future<void> _loadRateCard() async {
     final token = context.read<UserProvider>().token;
     if (token == null) return;
-    await context.read<RateCardProvider>().loadMyRateCard(token: token);
+    if (widget.isOwner) {
+      await context.read<RateCardProvider>().loadMyRateCard(token: token);
+    } else if (widget.creativeId != null && widget.creativeId!.isNotEmpty) {
+      // Client viewing a creative's rate card — fetch the public card by id,
+      // not "me" (which would 403 for a non-photographer).
+      await context
+          .read<RateCardProvider>()
+          .loadPhotographerRateCard(photographerId: widget.creativeId!);
+    }
   }
 
   Future<void> _startConversation(BuildContext context) async {
@@ -244,29 +271,35 @@ class _RateCardPageState extends State<RateCardPage> {
                       ),
                       const SizedBox(height: 6),
                       Row(
-                        children: const [
-                          Icon(
+                        children: [
+                          const Icon(
                             Icons.camera_alt_outlined,
                             size: 12,
                             color: Colors.grey,
                           ),
-                          SizedBox(width: 4),
-                          Text(
+                          const SizedBox(width: 4),
+                          const Text(
                             '243 shoots completed',
                             style: TextStyle(fontSize: 11, color: Colors.grey),
                           ),
-                          SizedBox(width: 8),
-                          Text('|', style: TextStyle(color: Colors.grey)),
-                          SizedBox(width: 8),
-                          Icon(
+                          const SizedBox(width: 8),
+                          const Text('|',
+                              style: TextStyle(color: Colors.grey)),
+                          const SizedBox(width: 8),
+                          const Icon(
                             Icons.location_on_outlined,
                             size: 12,
                             color: Colors.grey,
                           ),
-                          SizedBox(width: 4),
-                          Text(
-                            'Based in Abuja',
-                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              _creativeCity != null
+                                  ? 'Based in $_creativeCity'
+                                  : '',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.grey),
+                            ),
                           ),
                         ],
                       ),
@@ -651,14 +684,13 @@ class _PackageCard extends StatelessWidget {
                         color: Colors.grey,
                       ),
                       const SizedBox(width: 6),
-                      if (item.deliveryTime.isNotEmpty)
-                        Text(
-                          'Delivery Time - $deliveryTime',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey,
-                          ),
+                      Text(
+                        'Delivery Time - $deliveryTime',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
                         ),
+                      ),
                     ],
                   ),
                   if (isOwner) ...[
@@ -797,7 +829,12 @@ class _AddPackageSheetState extends State<_AddPackageSheet> {
       _inclusions = List.from(widget.existing!.whatsIncluded);
       _pricingMode = widget.existing!.pricingMode;
       _selectedCategory = widget.existing!.categories.isNotEmpty
-          ? widget.existing!.categories.first
+          ? _kCategories.firstWhere(
+              (c) =>
+                  c.toLowerCase() ==
+                  widget.existing!.categories.first.toLowerCase(),
+              orElse: () => widget.existing!.categories.first,
+            )
           : null;
     }
   }
@@ -816,9 +853,13 @@ class _AddPackageSheetState extends State<_AddPackageSheet> {
 
   Future<void> _save() async {
     if (_nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Package name is required')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Package name is required')));
+      return;
+    }
+    if (_deliveryCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Delivery time is required')));
       return;
     }
     setState(() => _loading = true);
@@ -1062,6 +1103,13 @@ class _AddPackageSheetState extends State<_AddPackageSheet> {
               ),
             ),
 
+            const SizedBox(height: 16),
+
+            _label('Delivery Time'),
+            _field(
+              _deliveryCtrl,
+              hint: 'e.g. 3-5 business days',
+            ),
             const SizedBox(height: 24),
 
             SizedBox(

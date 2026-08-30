@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:mobile_frontend/app/buttons.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
-import 'package:mobile_frontend/features/auth/passwordreset/passwordmail.dart';
+import 'package:mobile_frontend/features/auth/passwordreset/password_reset_confirm_screen.dart';
+import 'package:mobile_frontend/services/authservice.dart';
 
 class PasswordResetPage extends StatelessWidget {
   const PasswordResetPage({super.key});
@@ -73,6 +74,37 @@ class ForgotPasswordForm extends StatefulWidget {
 class _ForgotPasswordFormState extends State<ForgotPasswordForm> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
+  bool _loading = false;
+  String? _error;
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() { _loading = true; _error = null; });
+
+    final result = await AuthService()
+        .requestPasswordReset(_emailController.text.trim());
+
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    switch (result) {
+      case PasswordResetResult.success:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PasswordResetConfirmScreen(
+              email: _emailController.text.trim(),
+            ),
+          ),
+        );
+      case PasswordResetResult.userNotFound:
+        setState(() => _error = 'No account found with that email.');
+      case PasswordResetResult.error:
+        setState(() => _error = 'Something went wrong. Please try again.');
+      default:
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,21 +138,22 @@ class _ForgotPasswordFormState extends State<ForgotPasswordForm> {
             },
           ),
 
-          const SizedBox(height: 10),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.red, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
+          const SizedBox(height: 16),
 
           // Send code button
           CustomButton(
-            onPressed: () {
-              if (_formKey.currentState!.validate()) {
-                // send code logic
-                print("Sending code");
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => MailSent()),
-                );
-              }
-            },
-            text: 'Request reset link',
+            onPressed: _loading ? () {} : () { _submit(); },
+            text: _loading ? 'Sending...' : 'Send Reset Code',
           ),
           SizedBox(height: 40),
           Row(

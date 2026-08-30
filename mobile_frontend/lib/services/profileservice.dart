@@ -278,7 +278,11 @@ class ProfilePortfolioService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return data;
+      if (data is List) return data;
+      if (data is Map) {
+        return data['items'] ?? data['rateCard'] ?? data['data'] ?? [];
+      }
+      return [];
     } else {
       throw Exception('Failed to load rate card (${response.statusCode})');
     }

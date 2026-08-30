@@ -9,6 +9,10 @@ import 'package:mobile_frontend/providers/chat_provider.dart';
 import 'package:provider/provider.dart';
 
 class CreativeBottomTabs extends StatefulWidget {
+  /// Global tab controller so other screens (e.g. notification deep-links) can
+  /// switch tabs (0=Home, 1=Bookings, 2=Add Portfolio, 3=Chat, 4=Profile).
+  static final ValueNotifier<int> tabIndex = ValueNotifier<int>(0);
+
   const CreativeBottomTabs({super.key});
 
   @override
@@ -17,10 +21,31 @@ class CreativeBottomTabs extends StatefulWidget {
 
 class _CreativeBottomTabsState extends State<CreativeBottomTabs> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = CreativeBottomTabs.tabIndex.value;
+    CreativeBottomTabs.tabIndex.addListener(_onExternalTab);
+  }
+
+  @override
+  void dispose() {
+    CreativeBottomTabs.tabIndex.removeListener(_onExternalTab);
+    super.dispose();
+  }
+
+  void _onExternalTab() {
+    if (mounted && _selectedIndex != CreativeBottomTabs.tabIndex.value) {
+      setState(() => _selectedIndex = CreativeBottomTabs.tabIndex.value);
+    }
+  }
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+    CreativeBottomTabs.tabIndex.value = index;
   }
 
   @override

@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mobile_frontend/app/skeleton.dart';
+import 'package:mobile_frontend/providers/user_provider.dart';
+import 'package:mobile_frontend/services/payout_service.dart';
+import 'package:provider/provider.dart';
+
+const _orange = Color(0xFFFF7A33);
+const _green = Color(0xFF047418);
 
 class BankAccountPage extends StatefulWidget {
   const BankAccountPage({super.key});
@@ -9,14 +16,61 @@ class BankAccountPage extends StatefulWidget {
 }
 
 class _BankAccountPageState extends State<BankAccountPage> {
-  // Mock saved account — null means not set yet
-  Map<String, String>? _savedAccount = {
-    'bankName': 'Access Bank',
-    'accountNumber': '0123456789',
-    'accountName': 'Timmon Photography',
-    'status': 'Verified',
-  };
+  Map<String, String>? _savedAccount;
+  bool _loadingAccount = true;
   bool _editing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAccount();
+  }
+
+  Future<void> _loadAccount() async {
+    final token = context.read<UserProvider>().token;
+    if (token == null) {
+      setState(() => _loadingAccount = false);
+      return;
+    }
+    final account = await PayoutService().getBankAccount(token: token);
+    if (!mounted) return;
+    setState(() {
+      _savedAccount = account == null
+          ? null
+          : {
+              'bankName':
+                  (account['bankName'] ?? account['bank_name'] ?? '').toString(),
+              'accountNumber':
+                  (account['accountNumberMasked'] ??
+                          account['account_number_masked'] ??
+                          '')
+                      .toString(),
+              'accountName':
+                  (account['accountName'] ?? account['account_name'] ?? '')
+                      .toString(),
+              'status':
+                  (account['isVerified'] == true) ? 'Verified' : 'Pending',
+            };
+      _loadingAccount = false;
+    });
+  }
+
+  Future<void> _deleteAccount() async {
+    final token = context.read<UserProvider>().token;
+    if (token == null) return;
+    final ok = await PayoutService().deleteBankAccount(token: token);
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _savedAccount = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bank account removed')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not remove bank account')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,31 +83,62 @@ class _BankAccountPageState extends State<BankAccountPage> {
           onTap: () => Navigator.pop(context),
           child: Container(
             margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              shape: BoxShape.circle,
+            ),
             child: const Icon(Icons.arrow_back, size: 20, color: Colors.black),
           ),
         ),
-        title: const Text('Bank Account',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+        title: const Text(
+          'Bank Account',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: _editing || _savedAccount == null
-            ? _EditView(
-                existing: _savedAccount,
-                onSaved: (account) {
-                  setState(() {
-                    _savedAccount = account;
-                    _editing = false;
-                  });
-                },
-                onCancel: () => setState(() => _editing = false),
-              )
-            : _ViewMode(
-                account: _savedAccount!,
-                onEdit: () => setState(() => _editing = true),
+      body: _loadingAccount
+          ? SkeletonPulse(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    SkeletonLine(width: 160, height: 16),
+                    SizedBox(height: 28),
+                    SkeletonLine(height: 13),
+                    SizedBox(height: 8),
+                    SkeletonLine(height: 13),
+                    SizedBox(height: 28),
+                    SkeletonLine(height: 13),
+                    SizedBox(height: 8),
+                    SkeletonLine(height: 13),
+                    SizedBox(height: 28),
+                    SkeletonBox(height: 48, radius: 12),
+                  ],
+                ),
               ),
-      ),
+            )
+          : Padding(
+              padding: const EdgeInsets.all(20),
+              child: _editing || _savedAccount == null
+                  ? _EditView(
+                      onSaved: (account) {
+                        setState(() {
+                          _savedAccount = account;
+                          _editing = false;
+                        });
+                      },
+                      onCancel: () => setState(() => _editing = false),
+                    )
+                  : _ViewMode(
+                      account: _savedAccount!,
+                      onEdit: () => setState(() => _editing = true),
+                      onDelete: _deleteAccount,
+                    ),
+            ),
     );
   }
 }
@@ -63,8 +148,13 @@ class _BankAccountPageState extends State<BankAccountPage> {
 class _ViewMode extends StatelessWidget {
   final Map<String, String> account;
   final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-  const _ViewMode({required this.account, required this.onEdit});
+  const _ViewMode({
+    required this.account,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -82,9 +172,15 @@ class _ViewMode extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Text('ACCOUNT DETAILS',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade500,
-                        letterSpacing: 0.8)),
+                child: Text(
+                  'ACCOUNT DETAILS',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade500,
+                    letterSpacing: 0.8,
+                  ),
+                ),
               ),
               _row('Bank Name', account['bankName'] ?? ''),
               _divider(),
@@ -92,7 +188,7 @@ class _ViewMode extends StatelessWidget {
               _divider(),
               _row('Account Name', account['accountName'] ?? ''),
               _divider(),
-              _row('Status', account['status'] ?? '', valueColor: const Color(0xFF047418)),
+              _row('Status', account['status'] ?? '', valueColor: _green),
             ],
           ),
         ),
@@ -101,12 +197,28 @@ class _ViewMode extends StatelessWidget {
           width: double.infinity,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF7A33),
+              backgroundColor: _orange,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: onEdit,
-            child: const Text('Edit', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Edit',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            onPressed: onDelete,
+            child: const Text(
+              'Remove account',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ),
       ],
@@ -119,9 +231,14 @@ class _ViewMode extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-            Text(value,
-                style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w500, color: valueColor ?? Colors.black87)),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: valueColor ?? Colors.black87,
+              ),
+            ),
           ],
         ),
       );
@@ -132,70 +249,116 @@ class _ViewMode extends StatelessWidget {
 // ── Edit mode ────────────────────────────────────────────────────────────────
 
 class _EditView extends StatefulWidget {
-  final Map<String, String>? existing;
   final Function(Map<String, String>) onSaved;
   final VoidCallback onCancel;
 
-  const _EditView({this.existing, required this.onSaved, required this.onCancel});
+  const _EditView({required this.onSaved, required this.onCancel});
 
   @override
   State<_EditView> createState() => _EditViewState();
 }
 
 class _EditViewState extends State<_EditView> {
-  late TextEditingController _accountNumberCtrl;
-  late TextEditingController _bankNameCtrl;
-  late TextEditingController _accountNameCtrl;
+  final _accountNumberCtrl = TextEditingController();
+  final _accountNameCtrl = TextEditingController();
+
+  List<Map<String, dynamic>> _banks = [];
+  String? _selectedBankCode;
+  String? _selectedBankName;
+  bool _loadingBanks = false;
   bool _loading = false;
-  bool _verified = false;
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _accountNumberCtrl = TextEditingController(text: widget.existing?['accountNumber'] ?? '');
-    _bankNameCtrl = TextEditingController(text: widget.existing?['bankName'] ?? '');
-    _accountNameCtrl = TextEditingController(text: widget.existing?['accountName'] ?? '');
+    _loadBanks();
   }
 
   @override
   void dispose() {
     _accountNumberCtrl.dispose();
-    _bankNameCtrl.dispose();
     _accountNameCtrl.dispose();
     super.dispose();
   }
 
-  // Simulate account name lookup
-  Future<void> _lookupAccountName() async {
-    final number = _accountNumberCtrl.text.trim();
-    final bank = _bankNameCtrl.text.trim();
-    if (number.length < 10 || bank.isEmpty) return;
-
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(seconds: 1)); // TODO: call real API
+  Future<void> _loadBanks() async {
+    final token = context.read<UserProvider>().token;
+    if (token == null) return;
+    setState(() => _loadingBanks = true);
+    final banks = await PayoutService().getBanks(token: token);
+    if (!mounted) return;
     setState(() {
-      _accountNameCtrl.text = 'Timmon Photography'; // mock result
-      _verified = false; // needs OTP to confirm
-      _loading = false;
+      _banks = banks;
+      _loadingBanks = false;
     });
   }
 
-  void _confirmWithOTP() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _OTPVerificationPage(
-          onVerified: () {
-            widget.onSaved({
-              'bankName': _bankNameCtrl.text.trim(),
-              'accountNumber': _accountNumberCtrl.text.trim(),
-              'accountName': _accountNameCtrl.text.trim(),
-              'status': 'Verified',
-            });
-          },
+  Future<void> _lookupAccountName() async {
+    final number = _accountNumberCtrl.text.trim();
+    if (number.length < 10 || _selectedBankCode == null) return;
+    final token = context.read<UserProvider>().token;
+    if (token == null) return;
+    setState(() => _loading = true);
+    try {
+      final name = await PayoutService().verifyAccount(
+        token: token,
+        accountNumber: number,
+        bankCode: _selectedBankCode!,
+      );
+      if (!mounted) return;
+      setState(() {
+        _accountNameCtrl.text = name ?? '';
+        _loading = false;
+      });
+      if (name == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not resolve account')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not resolve account: $e')),
+      );
+    }
+  }
+
+  Future<void> _save() async {
+    final token = context.read<UserProvider>().token;
+    if (token == null || _selectedBankCode == null) return;
+    final number = _accountNumberCtrl.text.trim();
+    final name = _accountNameCtrl.text.trim();
+    if (number.length < 10 || name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter an account number and resolve the name'),
         ),
-      ),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    final result = await PayoutService().saveBankAccount(
+      token: token,
+      bankCode: _selectedBankCode!,
+      accountNumber: number,
+      accountName: name,
     );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (result.success) {
+      widget.onSaved({
+        'bankName': _selectedBankName ?? '',
+        'accountNumber': number,
+        'accountName': name,
+        'status': 'Verified',
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+    }
   }
 
   @override
@@ -207,17 +370,50 @@ class _EditViewState extends State<_EditView> {
         TextField(
           controller: _accountNumberCtrl,
           keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(10),
+          ],
           onChanged: (_) => _lookupAccountName(),
           decoration: _dec('0123456789'),
         ),
         const SizedBox(height: 16),
 
         _label('Bank Name'),
-        TextField(
-          controller: _bankNameCtrl,
-          onChanged: (_) => _lookupAccountName(),
-          decoration: _dec('Access Bank'),
+        DropdownButtonFormField<String>(
+          initialValue: _selectedBankCode,
+          hint: const Text('Select Bank'),
+          isExpanded: true,
+          decoration: _dec(''),
+          items: _loadingBanks
+              ? [
+                  const DropdownMenuItem<String>(
+                    value: 'loading',
+                    child: Text('Loading banks...'),
+                  ),
+                ]
+              : _banks
+                  .map(
+                    (b) => DropdownMenuItem<String>(
+                      value: b['code']?.toString(),
+                      child: Text(b['name']?.toString() ?? ''),
+                    ),
+                  )
+                  .toList(),
+          onChanged: _loadingBanks
+              ? null
+              : (code) {
+                  setState(() {
+                    _selectedBankCode = code;
+                    _selectedBankName = _banks
+                        .firstWhere(
+                          (b) => b['code']?.toString() == code,
+                          orElse: () => {},
+                        )['name']
+                        ?.toString();
+                  });
+                  _lookupAccountName();
+                },
         ),
         const SizedBox(height: 16),
 
@@ -234,8 +430,12 @@ class _EditViewState extends State<_EditView> {
               const Padding(
                 padding: EdgeInsets.only(right: 12),
                 child: SizedBox(
-                  width: 16, height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF7A33)),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _orange,
+                  ),
                 ),
               ),
           ],
@@ -254,13 +454,30 @@ class _EditViewState extends State<_EditView> {
           width: double.infinity,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF7A33),
+              backgroundColor: _orange,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            onPressed: _accountNameCtrl.text.isEmpty ? null : _confirmWithOTP,
-            child: const Text('Confirm with OTP and Save',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            onPressed:
+                (_accountNameCtrl.text.isEmpty || _saving) ? null : _save,
+            child: _saving
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Text(
+                    'Save Account',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
           ),
         ),
         const SizedBox(height: 12),
@@ -277,148 +494,32 @@ class _EditViewState extends State<_EditView> {
 
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        child: Text(
+          text,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
       );
 
   InputDecoration _dec(String hint) => InputDecoration(
         hintText: hint,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-        disabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFFF7A33))),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: _orange),
+        ),
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
-}
-
-// ── OTP Page ─────────────────────────────────────────────────────────────────
-
-class _OTPVerificationPage extends StatefulWidget {
-  final VoidCallback onVerified;
-  const _OTPVerificationPage({required this.onVerified});
-
-  @override
-  State<_OTPVerificationPage> createState() => _OTPVerificationPageState();
-}
-
-class _OTPVerificationPageState extends State<_OTPVerificationPage> {
-  final List<TextEditingController> _controllers = List.generate(4, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(4, (_) => FocusNode());
-  bool _loading = false;
-
-  @override
-  void dispose() {
-    for (final c in _controllers) c.dispose();
-    for (final f in _focusNodes) f.dispose();
-    super.dispose();
-  }
-
-  void _onDigitEntered(int index, String value) {
-    if (value.isNotEmpty && index < 3) {
-      _focusNodes[index + 1].requestFocus();
-    }
-    if (index == 3 && value.isNotEmpty) {
-      _verify();
-    }
-  }
-
-  Future<void> _verify() async {
-    final otp = _controllers.map((c) => c.text).join();
-    if (otp.length < 4) return;
-
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(seconds: 1)); // TODO: verify with backend
-    setState(() => _loading = false);
-
-    if (mounted) {
-      Navigator.pop(context); // close OTP page
-      widget.onVerified();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
-            child: const Icon(Icons.arrow_back, size: 20, color: Colors.black),
-          ),
-        ),
-        title: const Text('Verify Via OTP',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Account Verification', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            const Text(
-              'Enter the verification code we just sent to your phone number.',
-              style: TextStyle(fontSize: 13, color: Colors.black54),
-            ),
-            const SizedBox(height: 32),
-
-            // OTP boxes
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(4, (i) => Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: _focusNodes[i].hasFocus ? const Color(0xFFFF7A33) : Colors.grey.shade300,
-                    width: 1.5,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: TextField(
-                  controller: _controllers[i],
-                  focusNode: _focusNodes[i],
-                  textAlign: TextAlign.center,
-                  keyboardType: TextInputType.number,
-                  maxLength: 1,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  decoration: const InputDecoration(
-                    counterText: '',
-                    border: InputBorder.none,
-                  ),
-                  onChanged: (v) => _onDigitEntered(i, v),
-                ),
-              )),
-            ),
-            const SizedBox(height: 32),
-
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF7A33),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _loading ? null : _verify,
-                child: _loading
-                    ? const SizedBox(height: 20, width: 20,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('Confirm OTP',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

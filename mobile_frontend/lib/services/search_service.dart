@@ -6,6 +6,37 @@ import 'package:http/http.dart' as http;
 class SearchService {
   final String baseUrl = 'https://api.photobookhq.com/api';
 
+  /// GET /api/search/users — discovery endpoint with role filtering.
+  /// role: photographer | client | all (videographer/content_creator coming)
+  Future<List<dynamic>> searchUsers({
+    String? role,
+    String sort = 'rating',
+    int limit = 50,
+    int offset = 0,
+    String? q,
+  }) async {
+    final params = <String, String>{
+      'sort': sort,
+      'limit': limit.toString(),
+      'offset': offset.toString(),
+      if (role != null) 'role': role,
+      if (q != null && q.isNotEmpty) 'q': q,
+    };
+    final uri = Uri.parse('$baseUrl/search/users')
+        .replace(queryParameters: params);
+    final response = await http.get(uri);
+
+    print('🔍 searchUsers(role=$role) [${response.statusCode}]: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data is List
+          ? data
+          : data['items'] ?? data['users'] ?? data['results'] ?? data['data'] ?? [];
+    }
+    return [];
+  }
+
   Future<List<dynamic>> getTopPhotographers({int limit = 50}) async {
     final response = await http.get(
       Uri.parse('$baseUrl/search/photographers?sort=rating&limit=$limit'),

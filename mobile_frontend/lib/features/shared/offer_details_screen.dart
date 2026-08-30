@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:mobile_frontend/features/client_dashboard/BookScreen/book.dart';
 import 'package:mobile_frontend/features/shared/offer_message_payload.dart';
 import 'package:mobile_frontend/services/offer_service.dart';
 
@@ -11,6 +12,7 @@ class OfferDetailsScreen extends StatefulWidget {
   final OfferMessagePayload payload;
   final String offeredByName;
   final String? offeredByAvatarUrl;
+  final String? offeredById;
 
   const OfferDetailsScreen({
     super.key,
@@ -18,6 +20,7 @@ class OfferDetailsScreen extends StatefulWidget {
     required this.payload,
     required this.offeredByName,
     this.offeredByAvatarUrl,
+    this.offeredById,
   });
 
   @override
@@ -93,9 +96,25 @@ class _OfferDetailsScreenState extends State<OfferDetailsScreen> {
   }
 
   void _accept() {
-    // Booking flow isn't wired up yet — intentionally a no-op for now.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Booking is coming soon')),
+    if (widget.offeredById == null || widget.offeredById!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Booking is coming soon')),
+      );
+      return;
+    }
+    // Lead into the booking page with the offer details locked in —
+    // event type greyed out, price carried over from the offer.
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BookingPage(
+          creativeId: widget.offeredById!,
+          name: widget.offeredByName,
+          avatarUrl: widget.offeredByAvatarUrl ?? '',
+          rating: 0,
+          offer: widget.payload,
+        ),
+      ),
     );
   }
 

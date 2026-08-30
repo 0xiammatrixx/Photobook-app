@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_frontend/app/skeleton.dart';
+import 'package:mobile_frontend/features/creative_dashboard/BookingsPage/booking_detail_page.dart';
 import 'package:mobile_frontend/providers/sessions_provider.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:provider/provider.dart';
@@ -47,9 +49,10 @@ class _CreativeBookingsPageState extends State<CreativeBookingsPage> {
               ),
 
               if (provider.isLoading)
-                const SliverFillRemaining(
-                  child: Center(
-                    child: CircularProgressIndicator(color: Color(0xFFFF7A33)),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => const SkeletonListTile(),
+                    childCount: 5,
                   ),
                 )
               else if (provider.sessions.isEmpty)
@@ -135,14 +138,21 @@ class _BookingCard extends StatelessWidget {
     final minute = date.minute.toString().padLeft(2, '0');
     final timeStr = "$hour:$minute";
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F9F6),
-        borderRadius: BorderRadius.circular(15),
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CreativeBookingDetailPage(session: session),
+        ),
       ),
-      child: Row(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F9F6),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Avatar
@@ -267,6 +277,7 @@ class _BookingCard extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }

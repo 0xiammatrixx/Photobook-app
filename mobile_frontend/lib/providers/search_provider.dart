@@ -11,6 +11,13 @@ class SearchProvider extends ChangeNotifier {
 
   List<dynamic> get topPhotographers => _topPhotographers;
 
+  // Hub "Explore Other Creatives" — server-side role filtering.
+  List<dynamic> _hubCreatives = [];
+  bool _hubLoading = false;
+
+  List<dynamic> get hubCreatives => _hubCreatives;
+  bool get hubLoading => _hubLoading;
+
   List<String> _trendingTags = [];
 
   // Search state
@@ -78,5 +85,29 @@ class SearchProvider extends ChangeNotifier {
     _searchTags = [];
     isSearching = false;
     notifyListeners();
+  }
+
+  /// Load creatives for the Hub, filtered server-side by role.
+  /// role: null = all, 'photographer' | 'videographer' | 'content_creator'.
+  Future<void> loadHubCreatives(String? role) async {
+    if (_hubLoading) return;
+    _hubLoading = true;
+    notifyListeners();
+    try {
+      // For 'all' use the photographers alias endpoint which has no role
+      // restriction yet; role-specific calls use /search/users.
+      final list = await _service.searchUsers(
+        role: role == 'all' || role == null ? 'all' : role,
+        sort: 'rating',
+        limit: 50,
+      );
+      _hubCreatives = list;
+    } catch (e) {
+      print('❌ loadHubCreatives failed: $e');
+      _hubCreatives = [];
+    } finally {
+      _hubLoading = false;
+      notifyListeners();
+    }
   }
 }

@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:mobile_frontend/app/skeleton.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_frontend/features/client_dashboard/BookScreen/book.dart';
+import 'package:mobile_frontend/features/creative_dashboard/AddPortfolioPage/addportfoliopage.dart';
 import 'package:mobile_frontend/features/creative_dashboard/AddPortfolioPage/video_portfolio_item.dart';
 import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profile_settings.dart';
 import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profileedit.dart';
@@ -9,11 +12,14 @@ import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/reviewmo
 import 'package:mobile_frontend/features/creative_dashboard/rateCard.dart';
 import 'package:mobile_frontend/features/shared/chat_conversation_screen.dart';
 import 'package:mobile_frontend/providers/chat_provider.dart';
+import 'package:mobile_frontend/providers/location_provider.dart';
 import 'package:mobile_frontend/providers/profile_provider.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/services/authservice.dart';
+import 'package:mobile_frontend/services/location_service.dart';
 import 'package:mobile_frontend/services/profileservice.dart';
+import 'package:mobile_frontend/services/review_service.dart';
 import 'package:provider/provider.dart';
  
 class CreativeProfilePage extends StatefulWidget {
@@ -30,6 +36,7 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
   final _profileService = ProfilePortfolioService();
   final AuthService _authService = AuthService();
   bool _loading = true;
+  String? _profileId;
  
   @override
   void initState() {
@@ -69,6 +76,13 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
         }
       }
  
+      _profileId = (raw['id'] ??
+              raw['user_id'] ??
+              raw['userId'] ??
+              raw['photographer_id'] ??
+              userProvider.id)
+          ?.toString();
+
       profileProvider.setProfile({
         'role': raw['role'] ?? 'photographer',
         'isOwner': widget.isOwner,
@@ -93,6 +107,29 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
       }
     } finally {
       setState(() => _loading = false);
+      _loadCreativeCity();
+    }
+  }
+
+  String? _creativeCity;
+
+  Future<void> _loadCreativeCity() async {
+    try {
+      if (widget.isOwner) {
+        // Owner: use device GPS directly — no API needed, always works
+        final pos = await Geolocator.getCurrentPosition();
+        final city = await LocationProvider.cityFromCoords(pos.latitude, pos.longitude);
+        if (mounted) setState(() => _creativeCity = city);
+      } else {
+        // Client viewing creative: use the stored location API
+        final loc = await LocationService().getUserLocation(widget.creativeId ?? '');
+        if (loc != null && mounted) {
+          final city = await LocationProvider.cityFromCoords(loc.latitude, loc.longitude);
+          if (mounted) setState(() => _creativeCity = city);
+        }
+      }
+    } catch (e) {
+      print('📍 _loadCreativeCity — error: $e');
     }
   }
  
@@ -110,8 +147,33 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
     final userProvider = Provider.of<UserProvider>(context);
  
     if (_loading || profile == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: Color(0xFFFF7A33))),
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: SkeletonPulse(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: const [
+              SkeletonBox(height: 220, radius: 0),
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SkeletonBox(width: 90, height: 90, circle: true),
+                    SizedBox(height: 12),
+                    SkeletonLine(width: 180, height: 18),
+                    SizedBox(height: 8),
+                    SkeletonLine(width: 120, height: 13),
+                    SizedBox(height: 16),
+                    SkeletonBox(height: 60, radius: 12),
+                    SizedBox(height: 16),
+                    SkeletonBox(height: 120, radius: 12),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
  
@@ -280,6 +342,7 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
                                                 name: businessName,
                                                 avatarUrl: avatarUrl ?? '',
                                                 rating: rating,
+                                                roles: BookingPage.rolesFromTags(tags),
                                               )),
                                             ),
                                             child: const Text('Book Now', style: TextStyle(color: Colors.white, fontSize: 12)),
@@ -373,12 +436,17 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
                                   const Icon(Icons.camera_alt_outlined, size: 14, color: Colors.grey),
                                   const SizedBox(width: 4),
                                   const Text('243 shoots completed', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                                  const SizedBox(width: 12),
-                                  const Text('|', style: TextStyle(color: Colors.grey)),
-                                  const SizedBox(width: 12),
-                                  const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
-                                  const SizedBox(width: 4),
-                                  const Text('Based in Abuja', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  if (_creativeCity != null) ...[
+                                    const SizedBox(width: 12),
+                                    const Text('|', style: TextStyle(color: Colors.grey)),
+                                    const SizedBox(width: 12),
+                                    const Icon(Icons.location_on_outlined, size: 14, color: Colors.grey),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Based in $_creativeCity',
+                                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ],
@@ -405,7 +473,12 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
                       ),
  
                     // ── Portfolio / Reviews tabs ──
-                    PortfolioReviewSection(totalReviews: profile['creativeDetails']?['totalReviews'] ?? 0),
+                    PortfolioReviewSection(
+                      totalReviews:
+                          profile['creativeDetails']?['totalReviews'] ?? 0,
+                      creativeId: widget.creativeId ?? _profileId,
+                      isOwner: isOwner,
+                    ),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -447,30 +520,66 @@ class _CreativeProfilePageState extends State<CreativeProfilePage> {
  
 class PortfolioReviewSection extends StatefulWidget {
   final int totalReviews;
-  const PortfolioReviewSection({super.key, this.totalReviews = 0});
- 
+  final String? creativeId;
+  final bool isOwner;
+
+  const PortfolioReviewSection({
+    super.key,
+    this.totalReviews = 0,
+    this.creativeId,
+    this.isOwner = true,
+  });
+
   @override
   State<PortfolioReviewSection> createState() => _PortfolioReviewSectionState();
 }
- 
+
 class _PortfolioReviewSectionState extends State<PortfolioReviewSection>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int? expandedIndex;
- 
+  List<Review> _reviews = [];
+  bool _reviewsLoading = false;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadReviews();
   }
- 
+
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
   }
- 
-  @override
+
+  Future<void> _loadReviews() async {
+    final token = context.read<UserProvider>().token;
+    final userId = widget.creativeId;
+    if (token == null) return;
+    if (userId == null || userId.isEmpty) {
+      setState(() => _reviewsLoading = false);
+      return;
+    }
+    setState(() => _reviewsLoading = true);
+    try {
+      final reviews = await ReviewService().getReviews(
+        token: token,
+        userId: userId,
+      );
+      if (mounted) {
+        setState(() {
+          _reviews = reviews;
+          _reviewsLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _reviewsLoading = false);
+    }
+  }
+
+  int get _reviewCount => _reviews.isNotEmpty ? _reviews.length : widget.totalReviews;
   Widget build(BuildContext context) {
     final profileProvider = Provider.of<ProfileProvider>(context);
     final creative = profileProvider.profile?['creativeDetails'] ?? {};
@@ -507,7 +616,7 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection>
                 child: Column(
                   children: [
                     Text(
-                      'Reviews (${widget.totalReviews})',
+                      'Reviews ($_reviewCount)',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -535,9 +644,34 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection>
  
   Widget _buildPortfolioGrid(List<Map<String, dynamic>> portfolio) {
     if (portfolio.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text('No portfolio items yet.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+      return _EmptyState(
+        asset: 'assets/emptyportfolio.png',
+        title: 'No portfolio projects yet',
+        subtitle:
+            'Add samples of your work to showcase your style and attract client.',
+        action: widget.isOwner
+            ? ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF7A33),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddPortfolioPage()),
+                ),
+                icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                label: const Text(
+                  'Add Projects',
+                  style: TextStyle(color: Colors.white),
+                ),
+              )
+            : null,
       );
     }
     final visible = portfolio.length > 9 ? portfolio.take(9).toList() : portfolio;
@@ -600,37 +734,85 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection>
   }
  
   Widget _buildReviewsSection() {
-    final List<Review> mockReviews = [
-      Review(userProfileUrl: "assets/avatar1.png", userName: "John Doe",
-          title: "Great experience!", text: "Loved the work, very professional.", rating: 5, date: DateTime.now()),
-      Review(userName: 'Goodie Martins', userProfileUrl: "assets/avatar1.png",
-          rating: 5, title: 'Best Corporate Photographer Ever',
-          text: 'A close friend referred me to him. I employed his services and he delivered excellently.',
-          date: DateTime(2025, 8, 12)),
-      Review(userName: 'Salem Ochidi', userProfileUrl: "assets/avatar1.png",
-          rating: 4, title: 'He\'s quite reliable',
-          text: 'I found him on the app. He was quite reliable and professional.',
-          date: DateTime(2025, 8, 12)),
-      Review(userProfileUrl: "assets/avatar2.png", userName: "Jane Smith",
-          title: "Okay job", text: "It was fine, but could be faster.", rating: 3, date: DateTime(2025, 8, 12)),
-    ];
+    if (_reviewsLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(
+          child: CircularProgressIndicator(color: Color(0xFFFF7A33)),
+        ),
+      );
+    }
+    if (_reviews.isEmpty) {
+      return _EmptyState(
+        asset: 'assets/emptyreview.png',
+        title: 'No Reviews Yet',
+        subtitle: widget.isOwner
+            ? 'Complete your first booking and deliver a great experience to '
+                'start receiving reviews from clients.'
+            : 'No reviews yet for this creative.',
+      );
+    }
     return Column(
       children: [
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: mockReviews.length > 3 ? 3 : mockReviews.length,
+          itemCount: _reviews.length > 3 ? 3 : _reviews.length,
           separatorBuilder: (_, __) => const Divider(height: 20),
-          itemBuilder: (_, i) => ReviewTile(review: mockReviews[i]),
+          itemBuilder: (_, i) => ReviewTile(review: _reviews[i]),
         ),
-        if (mockReviews.length > 3)
+        if (_reviews.length > 3)
           TextButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => FullReviewsPage(reviews: mockReviews),
-            )),
-            child: const Text('See more', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => FullReviewsPage(reviews: _reviews),
+              ),
+            ),
+            child: const Text(
+              'See more',
+              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+            ),
           ),
       ],
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final String asset;
+  final String title;
+  final String subtitle;
+  final Widget? action;
+
+  const _EmptyState({
+    required this.asset,
+    required this.title,
+    required this.subtitle,
+    this.action,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Column(
+        children: [
+          Image.asset(asset, width: 140, height: 140, fit: BoxFit.contain),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+          ),
+          if (action != null) ...[const SizedBox(height: 14), action!],
+        ],
+      ),
     );
   }
 }
@@ -705,7 +887,7 @@ class _FullReviewsPageState extends State<FullReviewsPage> {
           ),
         ],
         title: Text(
-          "My Reviews (${widget.reviews.length})",
+          "Reviews (${widget.reviews.length})",
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
       ),
@@ -875,13 +1057,34 @@ class ReviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final avatarUrl = review.userProfileUrl;
+    final isNetwork = avatarUrl != null && avatarUrl.startsWith('http');
+
+    final Widget avatar = isNetwork
+        ? ClipOval(
+            child: Image.network(
+              avatarUrl,
+              width: 40,
+              height: 40,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 40,
+                height: 40,
+                color: Colors.grey.shade200,
+                child: const Icon(Icons.person, color: Colors.grey),
+              ),
+            ),
+          )
+        : CircleAvatar(
+            radius: 20,
+            backgroundColor: Colors.grey.shade200,
+            child: const Icon(Icons.person, color: Colors.grey),
+          );
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          backgroundImage: AssetImage(review.userProfileUrl),
-          radius: 20,
-        ),
+        avatar,
         const SizedBox(width: 12),
         Expanded(
           child: Column(

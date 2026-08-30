@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "841792367578",
+    "project_id": "photobook-49cc3",
+    "storage_bucket": "photobook-49cc3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:841792367578:android:dd4d37562827aae1ef2ee3",
+        "android_client_info": {
+          "package_name": "com.example.mobile_frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1b3aZuYaHyb3TAoECIduQVp691Pwx0_M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

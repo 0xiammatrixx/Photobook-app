@@ -5,6 +5,7 @@ import 'package:mobile_frontend/features/client_dashboard/bottom_nav_bar.dart';
 import 'package:mobile_frontend/features/creative_dashboard/bottom_nav_bar.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/services/authservice.dart';
+import 'package:mobile_frontend/services/push_notification_service.dart';
 import 'package:mobile_frontend/app/buttons.dart';
 import 'package:mobile_frontend/features/auth/login/loginscreen.dart';
 import 'package:mobile_frontend/features/auth/roleSelection.dart';
@@ -26,6 +27,7 @@ class _SignUpFormState extends State<SignUpForm> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
+  bool _showPassword = false;
   bool isLoading = false;
 
   final AuthService _authService = AuthService();
@@ -70,6 +72,7 @@ class _SignUpFormState extends State<SignUpForm> {
       final user = data['user'];
       final token = data['token'];
       Provider.of<UserProvider>(context, listen: false).setUser(user, token);
+      PushNotificationService().registerCurrentToken();
 
       final role = user['role']?.toString().toLowerCase();
 
@@ -164,10 +167,24 @@ class _SignUpFormState extends State<SignUpForm> {
                 borderSide: BorderSide(color: Color(0xFFFF7A33)),
               ),
             ),
-            obscureText: true,
+            obscureText: !_showPassword,
             validator: (value) => value == null || value.length < 6
                 ? 'Password must be at least 6 characters'
                 : null,
+          ),
+
+          Row(
+            children: [
+              Checkbox(
+                value: _showPassword,
+                onChanged: (value) {
+                  setState(() {
+                    _showPassword = value ?? false;
+                  });
+                },
+              ),
+              const Text('Show password'),
+            ],
           ),
 
           const SizedBox(height: 24),
@@ -176,7 +193,11 @@ class _SignUpFormState extends State<SignUpForm> {
           SizedBox(
             width: double.infinity,
             height: 50,
-            child: CustomButton(onPressed: _handleSignUp, text: 'Continue'),
+            child: CustomButton(
+              onPressed: _handleSignUp,
+              text: 'Continue',
+              loading: isLoading,
+            ),
           ),
 
           const SizedBox(height: 24),
@@ -273,15 +294,25 @@ class _SignUpFormState extends State<SignUpForm> {
             width: double.infinity,
             height: 50,
             child: OutlinedButton.icon(
-              onPressed: _signInWithGoogle,
+              onPressed: isLoading ? null : _signInWithGoogle,
               style: OutlinedButton.styleFrom(
                 backgroundColor: Color(0xFFEEEEEE),
+                disabledBackgroundColor: Color(0xFFEEEEEE),
                 side: BorderSide(color: Color(0xFFEEEEEE)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              icon: SvgPicture.asset('assets/googleicon.svg', height: 20),
+              icon: isLoading
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF181818),
+                      ),
+                    )
+                  : SvgPicture.asset('assets/googleicon.svg', height: 20),
               label: const Text(
                 'Continue with Google',
                 style: TextStyle(

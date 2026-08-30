@@ -15,12 +15,14 @@ class CallScreen extends StatefulWidget {
 
 class _CallScreenState extends State<CallScreen> {
   Timer? _tickTimer;
-  late CallProvider _callProvider; // ✅ captured once, safe to use in dispose
+  late CallProvider _callProvider;
+  bool _actionTaken = false; // prevents double-tap on accept/decline
 
   @override
   void initState() {
     super.initState();
     _callProvider = context.read<CallProvider>();
+    print('📞 [CallScreen] initState — status: ${_callProvider.status}, peer: ${_callProvider.peerName}, video: ${_callProvider.isVideoCall}');
     _callProvider.addListener(_handleChange);
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
@@ -30,6 +32,7 @@ class _CallScreenState extends State<CallScreen> {
   void _handleChange() {
     final status = _callProvider.status;
     if (status == CallStatus.idle && mounted && Navigator.of(context).canPop()) {
+      print('📞 [CallScreen] _handleChange — status is idle, popping screen');
       Navigator.of(context).pop();
     }
   }
@@ -156,13 +159,23 @@ class _CallScreenState extends State<CallScreen> {
         children: [
           _roundButton(
             icon: Icons.call_end,
-            color: Colors.red,
-            onTap: call.declineCall,
+            color: _actionTaken ? Colors.grey : Colors.red,
+            onTap: _actionTaken
+                ? null
+                : () {
+                    _actionTaken = true;
+                    call.declineCall();
+                  },
           ),
           _roundButton(
             icon: Icons.call,
-            color: Colors.green,
-            onTap: call.acceptCall,
+            color: _actionTaken ? Colors.grey : Colors.green,
+            onTap: _actionTaken
+                ? null
+                : () {
+                    _actionTaken = true;
+                    call.acceptCall();
+                  },
           ),
         ],
       );
@@ -217,7 +230,7 @@ class _CallScreenState extends State<CallScreen> {
   Widget _roundButton({
     required IconData icon,
     required Color color,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
     double size = 56,
   }) {
     return GestureDetector(

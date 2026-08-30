@@ -4,6 +4,8 @@ import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profilep
 import 'package:mobile_frontend/features/shared/call_screen.dart';
 import 'package:mobile_frontend/features/shared/offer_bubble.dart';
 import 'package:mobile_frontend/features/shared/offer_message_payload.dart';
+import 'package:mobile_frontend/features/shared/rate_card_details_page.dart';
+import 'package:mobile_frontend/features/shared/rate_card_payload.dart';
 import 'package:mobile_frontend/features/shared/send_custom_offer_screen.dart';
 import 'package:mobile_frontend/providers/call_provider.dart';
 import 'package:mobile_frontend/providers/chat_provider.dart';
@@ -177,31 +179,34 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         return;
       }
  
-      // Format rate card as a readable message
-      final lines = items
-          .map((item) {
-            final name = item['serviceName'] ?? '';
-            final price = item['pricingMode'] == 'contact'
-                ? 'Contact for price'
-                : '₦${item['pricingAmount']}';
-            return '• $name — $price';
-          })
-          .join('\n');
- 
-      final content = '📋 *My Rate Card*\n$lines';
+      // Build structured payload (same pattern as OfferMessagePayload)
+      // Build structured payload (same pattern as OfferMessagePayload)
+      final payload = RateCardPayload(
+        items: items.map((item) {
+          final whatsInc = item['whats_included'] ?? item['whatsIncluded'];
+          return RateCardItem(
+            serviceName: (item['service_name'] ?? item['serviceName'] ?? '').toString(),
+            pricingAmount: (item['pricing_amount'] ?? item['pricingAmount'])?.toString(),
+            pricingMode: (item['pricing_mode'] ?? item['pricingMode'])?.toString(),
+            whatsIncluded: whatsInc is List ? List<String>.from(whatsInc) : [],
+            description: (item['description'] ?? '').toString(),
+            deliveryTime: (item['delivery_time'] ?? item['deliveryTime'] ?? '').toString(),
+          );
+        }).toList(),
+      );
+
       context.read<ChatProvider>().sendMessage(
         token: token,
         conversationId: widget.conversationId,
-        content: content,
+        content: payload.toMessageString(),
       );
       setState(() => _showActions = false);
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to send rate card: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to send rate card: $e')));
     }
   }
- 
+
   void _openSendCustomOffer() {
     final token = context.read<UserProvider>().token ?? '';
     Navigator.push(
@@ -220,15 +225,46 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
 
   Future<void> _startCall({required bool isVideo}) async {
     final callProvider = context.read<CallProvider>();
+    final chatProvider = context.read<ChatProvider>();
+
+    print('📞 [ChatScreen] _startCall(video: $isVideo) — callProvider status: ${callProvider.status}, socket connected: ${chatProvider.isSocketConnected}');
+
+    // ── Validate BEFORE pushing the call screen ──
     if (callProvider.status != CallStatus.idle) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You\'re already on a call.')),
-      );
+      print('📞 [ChatScreen] _startCall BLOCKED — status is ${callProvider.status}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              callProvider.lastError != null
+                  ? callProvider.lastError!
+                  : 'You\'re already on a call.',
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
       return;
     }
 
+    if (!chatProvider.isSocketConnected) {
+      print('📞 [ChatScreen] _startCall BLOCKED — socket not connected');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Not connected to chat server. Please wait...'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+
+    print('📞 [ChatScreen] _startCall — pushing CallScreen then starting call...');
+
     // Push the call screen first so the caller sees "Calling..." /
     // permission prompts immediately, rather than waiting in silence.
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const CallScreen()),
@@ -241,6 +277,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       peerAvatarUrl: widget.avatarUrl,
       isVideo: isVideo,
     );
+    print('📞 [ChatScreen] _startCall — startCall completed, status: ${callProvider.status}');
   }
  
   @override
@@ -312,14 +349,11 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                       } else if (lastSeen != null) {
                         status = 'Active ${_formatLastSeen(lastSeen)}';
                       } else {
-                        // No presence event received yet for this user in
-                        // this session — the API has no "who's online
-                        // right now" query, only online/offline events as
-                        // they happen, so there's nothing to show yet.
-                        status = '';
+                        // No presence event received yet for this session.
+                        // Show "Offline" so the indicator is never blank.
+                        status = 'Offline';
                       }
 
-                      if (status.isEmpty) return const SizedBox.shrink();
                       return Text(
                         status,
                         style: TextStyle(fontSize: 11, color: color),
@@ -521,8 +555,10 @@ class _MessageBubble extends StatelessWidget {
     final content = message['content'] ?? '';
     final createdAt = message['createdAt'] ?? '';
  
-    final isRateCard = content.startsWith('📋 *My Rate Card*');
+    final isRateCard = RateCardPayload.tryParse(content) != null ||
+        content.startsWith('📋 *My Rate Card*'); // backward compat
     final offerPayload = OfferMessagePayload.tryParse(content);
+    final rateCardPayload = RateCardPayload.tryParse(content);
     final isSpecialBubble = isRateCard || offerPayload != null;
  
     return Align(
@@ -567,7 +603,10 @@ class _MessageBubble extends StatelessWidget {
                 onEdited: onOfferEdited,
               )
             : isRateCard
-                ? _RateCardBubble(content: content)
+                ? _RateCardBubble(
+                    content: content,
+                    payload: rateCardPayload,
+                  )
                 : Column(
                     crossAxisAlignment: isMe
                         ? CrossAxisAlignment.end
@@ -598,40 +637,65 @@ class _MessageBubble extends StatelessWidget {
  
 class _RateCardBubble extends StatelessWidget {
   final String content;
-  const _RateCardBubble({required this.content});
- 
+  final RateCardPayload? payload;
+  const _RateCardBubble({required this.content, this.payload});
+
   @override
   Widget build(BuildContext context) {
     final lines = content.split('\n');
     final items = lines.skip(1).toList();
- 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text('📋', style: TextStyle(fontSize: 20)),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'My Rate Card',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              ...items.map(
-                (line) => Text(
-                  line,
-                  style: const TextStyle(fontSize: 12, color: Colors.black87),
-                ),
-              ),
-            ],
+
+    return GestureDetector(
+      onTap: () {
+        // Navigate to rate card details page
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RateCardDetailsPage(
+              payload: payload,
+              fallbackItems: items,
+            ),
           ),
-        ),
-      ],
+        );
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('📋', style: TextStyle(fontSize: 20)),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'My Rate Card',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                ...items.take(3).map(
+                  (line) => Text(
+                    line,
+                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (items.length > 3)
+                  Text(
+                    'Tap to view full rate card',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade500,
+                        fontStyle: FontStyle.italic),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
- 
+
 class _ActionButton extends StatelessWidget {
   final String icon;
   final String label;

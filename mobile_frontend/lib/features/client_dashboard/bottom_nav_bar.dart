@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:mobile_frontend/features/client_dashboard/BookingsScreen/client_bookings.dart';
 import 'package:mobile_frontend/features/client_dashboard/ChatScreen/chat.dart';
 import 'package:mobile_frontend/features/client_dashboard/HomeScreen/home.dart';
 import 'package:mobile_frontend/features/client_dashboard/HubScreen/hub.dart';
@@ -8,6 +9,10 @@ import 'package:mobile_frontend/providers/chat_provider.dart';
 import 'package:provider/provider.dart';
 
 class BottomTabs extends StatefulWidget {
+  /// Global tab controller so other screens (e.g. payment success) can
+  /// switch tabs (0=Home, 1=Bookings, 2=Hub, 3=Chat, 4=Profile).
+  static final ValueNotifier<int> tabIndex = ValueNotifier<int>(0);
+
   const BottomTabs({super.key});
 
   @override
@@ -17,8 +22,28 @@ class BottomTabs extends StatefulWidget {
 class _BottomTabsState extends State<BottomTabs> {
   int _selectedIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = BottomTabs.tabIndex.value;
+    BottomTabs.tabIndex.addListener(_onExternalTab);
+  }
+
+  @override
+  void dispose() {
+    BottomTabs.tabIndex.removeListener(_onExternalTab);
+    super.dispose();
+  }
+
+  void _onExternalTab() {
+    if (mounted && _selectedIndex != BottomTabs.tabIndex.value) {
+      setState(() => _selectedIndex = BottomTabs.tabIndex.value);
+    }
+  }
+
   final List<Widget> _pages = [
     HomeScreen(),
+    ClientBookingsPage(),
     HubScreen(),
     ChatScreen(),
     ClientProfileScreen(),
@@ -28,6 +53,7 @@ class _BottomTabsState extends State<BottomTabs> {
     setState(() {
       _selectedIndex = index;
     });
+    BottomTabs.tabIndex.value = index;
   }
 
   @override
@@ -55,6 +81,21 @@ class _BottomTabsState extends State<BottomTabs> {
               color: Color(0xFFFF7A33),
             ),
             label: "Home",
+          ),
+          BottomNavigationBarItem(
+            icon: SvgPicture.asset(
+              'assets/clientbooking.svg',
+              width: 24,
+              height: 24,
+              color: Colors.black,
+            ),
+            activeIcon: SvgPicture.asset(
+              'assets/clientbooking.svg',
+              width: 24,
+              height: 24,
+              color: Color(0xFFFF7A33),
+            ),
+            label: 'Bookings',
           ),
           BottomNavigationBarItem(
             icon: SvgPicture.asset(
