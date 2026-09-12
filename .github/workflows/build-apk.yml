@@ -30,6 +30,41 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Patch flutter_webrtc (remove v1 embedding)
+        run: |
+          python3 - <<'PY'
+          import sys, glob, os
+          path = os.path.expanduser(
+              "~/.pub-cache/hosted/pub.dev/flutter_webrtc-0.11.6+hotfix.1/"
+              "android/src/main/java/com/cloudwebrtc/webrtc/FlutterWebRTCPlugin.java"
+          )
+          if not os.path.exists(path):
+              sys.exit(f"ERROR: plugin file not found: {path}")
+          src = open(path).read()
+          # Remove the v1 embedding import.
+          src = src.replace("import io.flutter.plugin.common.PluginRegistry.Registrar;\n", "")
+          # Remove the registerWith(Registrar) method (balanced braces).
+          marker = "public static void registerWith(Registrar registrar)"
+          idx = src.find(marker)
+          if idx != -1:
+              brace = src.find("{", idx)
+              depth = 0
+              i = brace
+              while i < len(src):
+                  if src[i] == "{":
+                      depth += 1
+                  elif src[i] == "}":
+                      depth -= 1
+                      if depth == 0:
+                          src = src[:idx] + src[i+1:]
+                          break
+                  i += 1
+              else:
+                  sys.exit("ERROR: could not find end of registerWith method")
+          open(path, "w").write(src)
+          print("patched flutter_webrtc (removed v1 Registrar code)")
+          PY
+
       - name: Build debug APK
         run: flutter build apk --debug
 
