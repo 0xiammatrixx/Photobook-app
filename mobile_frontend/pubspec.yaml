@@ -115,7 +115,6 @@ flutter:
     - assets/
     - assets/portfolio1.svg
     - assets/sounds/shuttersound.mp3
-    - packages/intl_phone_field/assets/flags/
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 
