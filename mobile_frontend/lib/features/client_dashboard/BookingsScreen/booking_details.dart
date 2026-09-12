@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_frontend/features/client_dashboard/BookingsScreen/client_booking_model.dart';
 import 'package:mobile_frontend/features/creative_dashboard/ProfilePage/profilepage.dart';
@@ -28,21 +31,34 @@ class _ClientBookingDetailsPageState extends State<ClientBookingDetailsPage>
   String? _pendingReference;
   String? _pendingToken;
 
+  final _appLinks = AppLinks();
+  StreamSubscription<Uri>? _appLinksSub;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _appLinksSub = _appLinks.uriLinkStream.listen(_handleDeepLink);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _appLinksSub?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _pendingReference != null) {
+      _verifyAndHandlePayment();
+    }
+  }
+
+  /// Paystack redirects back to `photobook://payment/callback` after payment.
+  void _handleDeepLink(Uri uri) {
+    if (uri.scheme != 'photobook') return;
+    if (_pendingReference != null) {
       _verifyAndHandlePayment();
     }
   }
@@ -381,8 +397,10 @@ class _ClientBookingDetailsPageState extends State<ClientBookingDetailsPage>
         token: token,
         sessionId: booking.id,
         amount: amount,
+        callbackUrl: 'photobook://payment/callback',
       );
-      final url = init?['paystackAuthorizationUrl'] ??
+      final url =
+          init?['paystackAuthorizationUrl'] ??
           init?['authorization_url'] ??
           init?['data']?['authorization_url'];
       final reference = (init?['reference'] ?? '').toString();
@@ -416,28 +434,35 @@ class _ClientBookingDetailsPageState extends State<ClientBookingDetailsPage>
     final token = _pendingToken;
     if (reference == null || token == null || !mounted) return;
 
-    try {
-      final verify = await PaymentService().verifyPayment(
-        token: token,
-        reference: reference,
-      );
-      final status = (verify?['status'] ?? '').toString().toLowerCase();
-      final confirmed = status == 'confirmed' ||
-          status == 'success' ||
-          status == 'successful';
-
-      _clearPendingPayment();
-
-      if (!mounted) return;
-      if (confirmed) {
-        _snack('Payment successful!');
-        Navigator.pop(context, true);
-      } else {
-        _snack('Payment not confirmed yet — you can retry any time.');
+    Map<String, dynamic>? verify;
+    // Poll briefly — the Paystack `charge.success` webhook that confirms the
+    // payment can land a moment after the user returns from the browser.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        verify = await PaymentService().verifyPayment(
+          token: token,
+          reference: reference,
+        );
+      } catch (_) {
+        verify = null;
       }
-    } catch (e) {
-      _clearPendingPayment();
-      if (mounted) _snack('Payment verification failed: $e');
+      if (isPaymentConfirmed(verify)) break;
+      if (attempt < 2) {
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+      }
+    }
+
+    final confirmed = isPaymentConfirmed(verify);
+    _clearPendingPayment();
+
+    if (!mounted) return;
+    if (confirmed) {
+      ClientBooking.markPaymentConfirmed(booking.id);
+      _snack('Payment successful!');
+      Navigator.pop(context, true);
+    } else {
+      _snack('Payment not confirmed yet — you can retry any time.');
     }
   }
 
@@ -996,7 +1021,7 @@ class _PaymentTimeline extends StatelessWidget {
     return _SectionCard(
       title: 'PAYMENT TIMELINE',
       rows: [
-        step('Payment Received', booking.dateLabel, done: true),
+        step('Payment Received', booking.dateLabel, done: booking.isPaid),
         step(
           'Session Completed',
           '${booking.dateLabel} - ${booking.timeLabel}',

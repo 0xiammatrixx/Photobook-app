@@ -1,4 +1,6 @@
-import 'package:flutter/cupertino.dart' show CupertinoPicker;
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_frontend/features/client_dashboard/PaymentScreen/payment_success_screen.dart';
 import 'package:mobile_frontend/features/shared/offer_message_payload.dart';
@@ -38,7 +40,11 @@ const _roleConfigs = <String, _RoleConfig>{
   'photographer': _RoleConfig(
     typeFieldLabel: 'Event Type',
     typeOptions: [
-      'Event', 'Fashion', 'Photo Coverage', 'Portrait', 'Wedding',
+      'Event',
+      'Fashion',
+      'Photo Coverage',
+      'Portrait',
+      'Wedding',
       'Street Photography',
     ],
     hasOutfits: true,
@@ -49,14 +55,21 @@ const _roleConfigs = <String, _RoleConfig>{
     hasShootingLocations: true,
     hasDeliverables: true,
     deliverableOptions: [
-      'Highlight Video', 'Full Coverage', 'Social Media Reel', 'Documentary',
+      'Highlight Video',
+      'Full Coverage',
+      'Social Media Reel',
+      'Documentary',
     ],
   ),
   'content_creator': _RoleConfig(
     typeFieldLabel: 'Content Type',
     typeOptions: [
-      'Behind-the-scenes content', 'Event highlights', 'Instagram reels',
-      'Social media content', 'Same-day content', 'Short-form content',
+      'Behind-the-scenes content',
+      'Event highlights',
+      'Instagram reels',
+      'Social media content',
+      'Same-day content',
+      'Short-form content',
       'Photo & video coverage',
     ],
     hasOutfits: true,
@@ -118,6 +131,11 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
   late String _role;
   CalendarFormat _calendarFormat = CalendarFormat.month;
 
+  // Booked time ranges for the currently selected date, fetched from the
+  // photographer's existing sessions. Used to grey out occupied slots.
+  List<Map<String, dynamic>> _bookedSlots = [];
+  bool _loadingBookedSlots = false;
+
   // Pending payment state — set when Paystack opens, cleared after verify.
   String? _pendingReference;
   String? _pendingToken;
@@ -126,12 +144,17 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
   String? _pendingDateLabel;
   String? _pendingTimeLabel;
 
-  _RoleConfig get _config => _roleConfigs[_role] ?? _roleConfigs['photographer']!;
+  final _appLinks = AppLinks();
+  StreamSubscription<Uri>? _appLinksSub;
+
+  _RoleConfig get _config =>
+      _roleConfigs[_role] ?? _roleConfigs['photographer']!;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _appLinksSub = _appLinks.uriLinkStream.listen(_handleDeepLink);
     final b = context.read<BookingProvider>();
     b.booking.creativeId = widget.creativeId;
     _role = widget.roles.first;
@@ -159,8 +182,9 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
   Future<void> _loadPackages() async {
     setState(() => _loadingPackages = true);
     try {
-      final list = await BookingService()
-          .getPublicRateCard(photographerId: widget.creativeId);
+      final list = await BookingService().getPublicRateCard(
+        photographerId: widget.creativeId,
+      );
       if (mounted) {
         setState(() => _packages = List<Map<String, dynamic>>.from(list));
       }
@@ -200,9 +224,9 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
     for (final e in _eventTypes) {
       final name = (e['display_name'] ?? e['displayName'] ?? '').toString();
       if (name == v && e['id'] != null) {
-        context
-            .read<BookingProvider>()
-            .setEventTypeId(int.tryParse(e['id'].toString()));
+        context.read<BookingProvider>().setEventTypeId(
+          int.tryParse(e['id'].toString()),
+        );
         break;
       }
     }
@@ -220,7 +244,11 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
   /// against and charges).
   double? _sessionAmount(Map<String, dynamic> session) {
     for (final key in [
-      'agreed_amount', 'amount', 'price', 'total_amount', 'total_price',
+      'agreed_amount',
+      'amount',
+      'price',
+      'total_amount',
+      'total_price',
       'pricing_amount',
     ]) {
       final v = session[key];
@@ -240,89 +268,100 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
     return '$name — $priceText';
   }
 
-  Future<void> _pickTimeRange() async {
-    final start = await _pickTime('Start Time', widget.offer == null ? null : null);
-    if (start == null || !mounted) return;
-    final end = await _pickTime('End Time', start);
-    if (end == null || !mounted) return;
-    context.read<BookingProvider>().setTimeRange(start, end);
+  /// 30-minute slots for a full day — used by the time-range picker so booked
+  /// slots can be greyed out and made unselectable.
+  static final List<String> _slotTimes = List.unmodifiable([
+    for (var h = 0; h < 24; h++)
+      for (var m = 0; m < 60; m += 30)
+        '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}',
+  ]);
+
+  static int _toMinutes(String hhmm) {
+    final parts = hhmm.split(':');
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
+    return h * 60 + m;
   }
 
-  Future<String?> _pickTime(String title, String? after) {
-    return showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) {
-        int hour = after != null ? int.parse(after.split(':')[0]) : 9;
-        int minute = after != null ? int.parse(after.split(':')[1]) : 0;
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return Container(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 160,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: CupertinoPicker(
-                            scrollController: FixedExtentScrollController(
-                                initialItem: hour),
-                            itemExtent: 32,
-                            onSelectedItemChanged: (v) => hour = v,
-                            children: List.generate(
-                              24,
-                              (i) => Center(
-                                  child: Text('${i.toString().padLeft(2, '0')}')),
-                            ),
-                          ),
-                        ),
-                        const Text(':'),
-                        Expanded(
-                          child: CupertinoPicker(
-                            scrollController: FixedExtentScrollController(
-                                initialItem: minute ~/ 5),
-                            itemExtent: 32,
-                            onSelectedItemChanged: (v) => minute = v * 5,
-                            children: List.generate(
-                              12,
-                              (i) => Center(
-                                  child: Text('${(i * 5).toString().padLeft(2, '0')}')),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _orange,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: () => Navigator.pop(
-                        ctx,
-                        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
-                      ),
-                      child: const Text('Done',
-                          style: TextStyle(color: Colors.white)),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+  /// Booked [startMinutes, endMinutes) ranges for the selected date.
+  List<List<int>> _bookedRangesForSelectedDate() {
+    final date = context.read<BookingProvider>().booking.date;
+    if (date == null) return [];
+    final dateKey =
+        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final ranges = <List<int>>[];
+    for (final slot in _bookedSlots) {
+      final slotDate = (slot['session_date'] ?? slot['scheduled_at'])
+          ?.toString()
+          .split('T')
+          .first;
+      if (slotDate != null && slotDate != dateKey) continue;
+      final start = _toMinutes(
+        (slot['session_time'] ?? slot['start_time'] ?? '').toString(),
+      );
+      final endRaw = (slot['session_end_time'] ?? slot['end_time'] ?? '')
+          .toString();
+      var end = _toMinutes(endRaw);
+      if (end <= start) end = start + 60; // fallback to a 1h block
+      // Ignore cancelled/declined sessions.
+      final status = (slot['status'] ?? '').toString().toLowerCase();
+      if (status.contains('cancel') || status.contains('decline')) continue;
+      ranges.add([start, end]);
+    }
+    return ranges;
+  }
+
+  bool _overlapsBooked(String start, String end) {
+    return _overlapsRange(
+      _toMinutes(start),
+      _toMinutes(end),
+      _bookedRangesForSelectedDate(),
     );
+  }
+
+  Future<void> _loadBookedSlots(DateTime date) async {
+    final token = context.read<UserProvider>().token;
+    if (token == null) return;
+    setState(() => _loadingBookedSlots = true);
+    try {
+      final slots = await BookingService().getPhotographerBookedSlots(
+        token: token,
+        photographerId: widget.creativeId,
+      );
+      if (mounted) setState(() => _bookedSlots = slots);
+    } catch (_) {
+      // Non-fatal: the create-session call also validates conflicts server-side.
+    } finally {
+      if (mounted) setState(() => _loadingBookedSlots = false);
+    }
+  }
+
+  Future<void> _pickTimeRange() async {
+    final booking = context.read<BookingProvider>().booking;
+    if (booking.date == null) {
+      _snack('Please select a date first');
+      return;
+    }
+    if (_bookedSlots.isEmpty && !_loadingBookedSlots) {
+      await _loadBookedSlots(booking.date!);
+      if (!mounted) return;
+    }
+
+    final result = await showModalBottomSheet<_TimeRange>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _TimeSlotSheet(
+        bookedRanges: _bookedRangesForSelectedDate(),
+        initialStart: booking.timeStart,
+        initialEnd: booking.timeEnd,
+      ),
+    );
+    if (result != null && mounted) {
+      context.read<BookingProvider>().setTimeRange(result.start, result.end);
+    }
   }
 
   Future<void> _onAddressChanged(String q) async {
@@ -353,8 +392,14 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
       _snack('Please select a package');
       return;
     }
-    if (booking.date == null || booking.timeStart == null || booking.timeEnd == null) {
+    if (booking.date == null ||
+        booking.timeStart == null ||
+        booking.timeEnd == null) {
       _snack('Please select date and time range');
+      return;
+    }
+    if (_overlapsBooked(booking.timeStart!, booking.timeEnd!)) {
+      _snack('That time is already booked. Please pick another slot.');
       return;
     }
     if (booking.locationType == null) {
@@ -409,18 +454,22 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
 
       if (!mounted) return;
 
-      final sessionId = (session['id'] ??
-              session['session_id'] ??
-              session['sessionId'] ??
-              session['session']?['id'] ??
-              session['data']?['id'])
-          ?.toString();
+      final sessionId =
+          (session['id'] ??
+                  session['session_id'] ??
+                  session['sessionId'] ??
+                  session['session']?['id'] ??
+                  session['data']?['id'])
+              ?.toString();
       // Prefer the session's agreed amount (what the backend charges) over the
       // rate-card price — POST /api/payments/initiate validates `amount`
       // against the session's agreed amount and never trusts the client value.
       final amount = _sessionAmount(session) ?? booking.packagePrice;
 
-      if (sessionId != null && sessionId.isNotEmpty && amount != null && amount > 0) {
+      if (sessionId != null &&
+          sessionId.isNotEmpty &&
+          amount != null &&
+          amount > 0) {
         await _startPaymentFlow(token, sessionId, amount);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -450,8 +499,10 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
         token: token,
         sessionId: sessionId,
         amount: amount,
+        callbackUrl: 'photobook://payment/callback',
       );
-      final url = init?['paystackAuthorizationUrl'] ??
+      final url =
+          init?['paystackAuthorizationUrl'] ??
           init?['authorization_url'] ??
           init?['data']?['authorization_url'];
       final reference = (init?['reference'] ?? '').toString();
@@ -502,49 +553,65 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
     }
   }
 
+  /// Paystack redirects back to `photobook://payment/callback` after payment.
+  /// Verify immediately instead of waiting for the lifecycle event.
+  void _handleDeepLink(Uri uri) {
+    if (uri.scheme != 'photobook') return;
+    if (_pendingReference != null) {
+      _verifyAndHandlePayment();
+    }
+  }
+
   Future<void> _verifyAndHandlePayment() async {
     final reference = _pendingReference;
     final token = _pendingToken;
     if (reference == null || token == null || !mounted) return;
 
-    try {
-      final verify = await PaymentService().verifyPayment(
-        token: token,
-        reference: reference,
-      );
-      final status = (verify?['status'] ?? '').toString().toLowerCase();
-      final confirmed = status == 'confirmed' ||
-          status == 'success' ||
-          status == 'successful';
-
-      final serviceType = _pendingServiceType ?? 'Session';
-      final dateLabel = _pendingDateLabel ?? '';
-      final timeLabel = _pendingTimeLabel ?? '';
-      final amount = _pendingAmount;
-
-      _clearPendingPayment();
-
-      if (!mounted) return;
-      if (confirmed) {
-        context.read<BookingProvider>().reset();
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PaymentSuccessScreen(
-              serviceType: serviceType,
-              creativeName: widget.name,
-              dateLabel: dateLabel,
-              timeLabel: timeLabel,
-              amountLabel: _formatMoney(amount),
-            ),
-          ),
+    Map<String, dynamic>? verify;
+    // Poll briefly — the Paystack `charge.success` webhook that confirms the
+    // payment can land a moment after the user returns from the browser.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        verify = await PaymentService().verifyPayment(
+          token: token,
+          reference: reference,
         );
-      } else {
-        _snack('Payment not confirmed yet — you can retry from your bookings.');
+      } catch (_) {
+        verify = null;
       }
-    } catch (e) {
-      _clearPendingPayment();
-      if (mounted) _snack('Payment verification failed: $e');
+      if (isPaymentConfirmed(verify)) break;
+      if (attempt < 2) {
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+      }
+    }
+
+    final confirmed = isPaymentConfirmed(verify);
+
+    final serviceType = _pendingServiceType ?? 'Session';
+    final dateLabel = _pendingDateLabel ?? '';
+    final timeLabel = _pendingTimeLabel ?? '';
+    final amount = _pendingAmount;
+
+    _clearPendingPayment();
+
+    if (!mounted) return;
+    if (confirmed) {
+      context.read<BookingProvider>().reset();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentSuccessScreen(
+            serviceType: serviceType,
+            creativeName: widget.name,
+            dateLabel: dateLabel,
+            timeLabel: timeLabel,
+            amountLabel: _formatMoney(amount),
+          ),
+        ),
+      );
+    } else {
+      _snack('Payment not confirmed yet — you can retry from your bookings.');
     }
   }
 
@@ -619,28 +686,28 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
   }
 
   Widget _bullet(String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '•  ',
-              style: TextStyle(color: _orange, fontWeight: FontWeight.bold),
-            ),
-            Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '•  ',
+          style: TextStyle(color: _orange, fontWeight: FontWeight.bold),
         ),
-      );
+        Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+      ],
+    ),
+  );
 
   void _snack(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _appLinksSub?.cancel();
     _addressCtrl.dispose();
     _noteCtrl.dispose();
     _outfitsCtrl.dispose();
@@ -681,21 +748,36 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: widget.avatarUrl.isNotEmpty
-                      ? Image.network(widget.avatarUrl,
-                          width: 90, height: 90, fit: BoxFit.cover,
+                      ? Image.network(
+                          widget.avatarUrl,
+                          width: 90,
+                          height: 90,
+                          fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Image.asset(
-                              'assets/profileplaceholder.png',
-                              width: 90, height: 90, fit: BoxFit.cover))
-                      : Image.asset('assets/profileplaceholder.png',
-                          width: 90, height: 90, fit: BoxFit.cover),
+                            'assets/profileplaceholder.png',
+                            width: 90,
+                            height: 90,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Image.asset(
+                          'assets/profileplaceholder.png',
+                          width: 90,
+                          height: 90,
+                          fit: BoxFit.cover,
+                        ),
                 ),
                 const SizedBox(width: 12),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.name,
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600)),
+                    Text(
+                      widget.name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     Row(
                       children: List.generate(
                         5,
@@ -722,8 +804,10 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
 
             // ── Role selector (multi-role creatives) ──
             if (widget.roles.length > 1) ...[
-              const Text('I want to book:',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              const Text(
+                'I want to book:',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -773,9 +857,7 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
               items: booking.isFromOffer
                   ? ['Agreed in offer']
                   : _eventTypeOptions,
-              onChange: booking.isFromOffer
-                  ? null
-                  : _onEventTypeSelected,
+              onChange: booking.isFromOffer ? null : _onEventTypeSelected,
             ),
 
             // ── Package (from rate card) ──
@@ -785,8 +867,8 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
               items: _loadingPackages
                   ? ['Loading packages...']
                   : _packages.isEmpty
-                      ? ['No packages available']
-                      : _packages.map(_packageLabel).toList(),
+                  ? ['No packages available']
+                  : _packages.map(_packageLabel).toList(),
               onChange: (v) {
                 if (v == null || _packages.isEmpty) return;
                 final idx = _packages.indexWhere((p) => _packageLabel(p) == v);
@@ -794,12 +876,14 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
                   final p = _packages[idx];
                   context.read<BookingProvider>().setPackage(v);
                   context.read<BookingProvider>().setRateCardItemId(
-                      (p['id'] ?? p['_id'] ?? '').toString());
+                    (p['id'] ?? p['_id'] ?? '').toString(),
+                  );
                   context.read<BookingProvider>().setPackagePrice(
-                      double.tryParse((p['pricing_amount'] ??
-                              p['pricingAmount'] ??
-                              '0')
-                          .toString()));
+                    double.tryParse(
+                      (p['pricing_amount'] ?? p['pricingAmount'] ?? '0')
+                          .toString(),
+                    ),
+                  );
                 }
               },
             ),
@@ -825,14 +909,18 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
             if (showCalendar) _calendar(),
 
             // ── Time range ──
-            const Text('Time',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            const Text(
+              'Time',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
             const SizedBox(height: 6),
             GestureDetector(
               onTap: _pickTimeRange,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 16,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.grey.shade400),
@@ -869,8 +957,10 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
             ),
 
             // ── Location with autocomplete ──
-            const Text('Location',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            const Text(
+              'Location',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
             const SizedBox(height: 6),
             if (!booking.useStudioLocation) ...[
               TextField(
@@ -881,7 +971,8 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
                       ? 'Type address manually'
                       : 'Type an address...',
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   focusedBorder: OutlineInputBorder(
                     borderSide: const BorderSide(color: _orange),
                     borderRadius: BorderRadius.circular(12),
@@ -903,35 +994,35 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
                   ),
                   child: Column(
                     children: [
-                      ..._addressSuggestions.map((s) => ListTile(
-                            dense: true,
-                            title: Text(
-                              s['display_name']?.toString() ?? '',
-                              style: const TextStyle(fontSize: 13),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onTap: () {
-                              final full = s['display_name']?.toString() ?? '';
-                              _addressCtrl.text = full;
-                              context
-                                  .read<BookingProvider>()
-                                  .setLocation(full);
-                              setState(() => _addressSuggestions = []);
-                            },
-                          )),
+                      ..._addressSuggestions.map(
+                        (s) => ListTile(
+                          dense: true,
+                          title: Text(
+                            s['display_name']?.toString() ?? '',
+                            style: const TextStyle(fontSize: 13),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () {
+                            final full = s['display_name']?.toString() ?? '';
+                            _addressCtrl.text = full;
+                            context.read<BookingProvider>().setLocation(full);
+                            setState(() => _addressSuggestions = []);
+                          },
+                        ),
+                      ),
                       // Manual fallback option
                       ListTile(
                         dense: true,
                         leading: const Icon(Icons.edit, size: 18),
                         title: Text(
                           'No match? Enter "$_addressCtrlValue" manually',
-                          style: const TextStyle(
-                              fontSize: 13, color: _orange),
+                          style: const TextStyle(fontSize: 13, color: _orange),
                         ),
                         onTap: () {
                           context.read<BookingProvider>().setLocation(
-                              _addressCtrl.text.trim());
+                            _addressCtrl.text.trim(),
+                          );
                           setState(() {
                             _manualAddress = true;
                             _addressSuggestions = [];
@@ -947,9 +1038,9 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
             CheckboxListTile(
               value: booking.useStudioLocation,
               onChanged: (v) {
-                context
-                    .read<BookingProvider>()
-                    .setUseStudioLocation(v ?? false);
+                context.read<BookingProvider>().setUseStudioLocation(
+                  v ?? false,
+                );
                 setState(() {});
               },
               title: const Text(
@@ -986,14 +1077,15 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
                 title: 'Deliverable Type',
                 value: booking.deliverableType,
                 items: _config.deliverableOptions ?? [],
-                onChange: (v) => context
-                    .read<BookingProvider>()
-                    .setDeliverableType(v),
+                onChange: (v) =>
+                    context.read<BookingProvider>().setDeliverableType(v),
               ),
 
             // ── Note ──
-            const Text('Add Note',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            const Text(
+              'Add Note',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
             const SizedBox(height: 6),
             SizedBox(
               height: 120,
@@ -1002,12 +1094,12 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
                 maxLines: null,
                 expands: true,
                 textAlignVertical: TextAlignVertical.top,
-                onChanged: (v) =>
-                    context.read<BookingProvider>().setNote(v),
+                onChanged: (v) => context.read<BookingProvider>().setNote(v),
                 decoration: InputDecoration(
                   hintText: 'Anything the creative should know...',
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   focusedBorder: OutlineInputBorder(
                     borderSide: const BorderSide(color: _orange),
                     borderRadius: BorderRadius.circular(12),
@@ -1035,11 +1127,14 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
                       )
-                    : const Text('Book Session',
-                        style:
-                            TextStyle(fontSize: 16, color: Colors.white)),
+                    : const Text(
+                        'Book Session',
+                        style: TextStyle(fontSize: 16, color: Colors.white),
+                      ),
               ),
             ),
           ],
@@ -1058,9 +1153,10 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style:
-                const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
@@ -1068,8 +1164,7 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
           onChanged: onChanged,
           decoration: InputDecoration(
             hintText: 'Enter number',
-            border:
-                OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             focusedBorder: OutlineInputBorder(
               borderSide: const BorderSide(color: _orange),
               borderRadius: BorderRadius.circular(12),
@@ -1090,9 +1185,10 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title,
-            style:
-                const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -1121,9 +1217,10 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title,
-            style:
-                const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 18),
@@ -1166,8 +1263,196 @@ class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
         onDaySelected: (selected, _) {
           context.read<BookingProvider>().setDate(selected);
           setState(() => showCalendar = false);
+          _loadBookedSlots(selected);
         },
       ),
+    );
+  }
+}
+
+/// True when [start, end) overlaps any [start, end) range in [ranges].
+bool _overlapsRange(int start, int end, List<List<int>> ranges) {
+  for (final r in ranges) {
+    if (start < r[1] && end > r[0]) return true;
+  }
+  return false;
+}
+
+class _TimeRange {
+  final String start;
+  final String end;
+  const _TimeRange(this.start, this.end);
+}
+
+/// Two-column time-range picker. Booked slots are greyed out and disabled.
+class _TimeSlotSheet extends StatefulWidget {
+  final List<List<int>> bookedRanges;
+  final String? initialStart;
+  final String? initialEnd;
+
+  const _TimeSlotSheet({
+    required this.bookedRanges,
+    this.initialStart,
+    this.initialEnd,
+  });
+
+  @override
+  State<_TimeSlotSheet> createState() => _TimeSlotSheetState();
+}
+
+class _TimeSlotSheetState extends State<_TimeSlotSheet> {
+  String? _start;
+  String? _end;
+
+  @override
+  void initState() {
+    super.initState();
+    _start = widget.initialStart;
+    _end = widget.initialEnd;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Select Time Range',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Greyed-out times are already booked.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _slotColumn(
+                    label: 'Start',
+                    selected: _start,
+                    enabled: (slot) {
+                      final m = _BookingPageState._toMinutes(slot);
+                      return !_overlapsRange(m, m + 30, widget.bookedRanges);
+                    },
+                    onTap: (slot) => setState(() {
+                      _start = slot;
+                      if (_end != null &&
+                          _BookingPageState._toMinutes(_end!) <=
+                              _BookingPageState._toMinutes(slot)) {
+                        _end = null;
+                      }
+                    }),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _slotColumn(
+                    label: 'End',
+                    selected: _end,
+                    enabled: (slot) {
+                      if (_start == null) return false;
+                      final startMin = _BookingPageState._toMinutes(_start!);
+                      final endMin = _BookingPageState._toMinutes(slot);
+                      if (endMin <= startMin) return false;
+                      return !_overlapsRange(
+                        startMin,
+                        endMin,
+                        widget.bookedRanges,
+                      );
+                    },
+                    onTap: (slot) => setState(() => _end = slot),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _orange,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: _start != null && _end != null
+                    ? () => Navigator.pop(context, _TimeRange(_start!, _end!))
+                    : null,
+                child: const Text(
+                  'Done',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _slotColumn({
+    required String label,
+    required String? selected,
+    required bool Function(String) enabled,
+    required ValueChanged<String> onTap,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 280),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _BookingPageState._slotTimes.length,
+            itemBuilder: (context, i) {
+              final slot = _BookingPageState._slotTimes[i];
+              final isEnabled = enabled(slot);
+              final isSelected = selected == slot;
+              return InkWell(
+                onTap: isEnabled ? () => onTap(slot) : null,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? _orange.withValues(alpha: 0.15)
+                        : isEnabled
+                        ? Colors.white
+                        : Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isSelected ? _orange : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Text(
+                    slot,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isEnabled ? Colors.black87 : Colors.grey[400],
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

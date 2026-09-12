@@ -203,9 +203,15 @@ class _AddPortfolioPageState extends State<AddPortfolioPage> {
         int? durationSeconds;
 
         if (isVideo) {
-          final info = await VideoCompress.getMediaInfo(filePath);
-          durationSeconds = ((info.duration ?? 0) / 1000)
-              .round(); // ms → seconds
+          try {
+            final info = await VideoCompress.getMediaInfo(filePath);
+            durationSeconds = ((info.duration ?? 0) / 1000)
+                .round(); // ms → seconds
+          } catch (_) {
+            // Duration is a nice-to-have; don't fail the whole upload if the
+            // compressor can't read metadata (varies across Android codecs).
+            durationSeconds = null;
+          }
         }
 
         final newItem = await ProfilePortfolioService().uploadPortfolioItem(

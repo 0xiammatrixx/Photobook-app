@@ -1,34 +1,37 @@
-The error is still coming from the backend — that message is the giveaway.
+Good news first: the backend **has now added ID-token verification** — this error is coming from `google-auth-library`, which means the verify step is running. What's left is a one-line audience mismatch.
 
-Why this is backend-side
-"executor is not a function" is a JavaScript TypeError, not a validation error. It's the exact text V8 throws when code does new Promise(executor) where executor isn't a function. It's leaking into the 400 response via a generic error handler.
+## The problem
 
-Critically, look at what your own API docs now say the 400 should be:
+Your ID token's `aud` (audience) claim is the **iOS client ID**, but the backend is checking against the **web client ID**.
 
-Your docs say 400 =	What you're actually getting
-Session has no agreed amount or amount mismatch	executor is not a function
-If the backend fix had actually landed, you'd either get a clean 201 with paystackAuthorizationUrl, or the documented 400 text. Getting executor is not a function means the /api/payments/initiate handler is still crashing before/inside its Paystack call — the fix isn't deployed, or only fixed one code path and this request hits another.
+- Token `aud` = `841792367578-t91482k7so8d5tac3qot43es2cumab47` (your iOS client)
+- Backend `audience` = `841792367578-3dnk4at4nbm0pvtpeh0aakeqlefcm8ba` (your web client)
 
-The one client-side thing the new docs changed
-Your docs now say: "The amount is ALWAYS taken from the session's agreed amount — the amount field in the body is validated against it and never trusted."
+On iOS, native Google Sign-In issues the ID token against the **iOS client** (`GIDClientID`); on Android it's the **web client** (`serverClientId`). So a single `audience` string can't match both.
 
-Your booking flow was sending booking.packagePrice (the rate-card price), which may differ from the session's stored agreed_amount. I aligned it so the client now sends the session's actual agreed_amount from the createSession response, falling back to the package price. This is the correct behavior regardless, and it removes the amount-mismatch variable entirely.
+## The fix (tell the backend dev)
 
-For the retry path I added earlier, it already reads agreed_amount (via the model change), so both flows are now consistent.
+Pass an **array** of accepted audiences instead of one string:
 
-To pinpoint the backend bug
-Ask the backend dev to do these three things, in order:
+```js
+const ticket = await client.verifyIdToken({
+  idToken: req.body.idToken,
+  audience: [
+    process.env.GOOGLE_CLIENT_ID,      // web (serverClientId) — Android
+    process.env.GOOGLE_IOS_CLIENT_ID,  // iOS GIDClientID
+  ],
+});
+```
 
-Confirm the deploy actually took — hit POST /api/payments/initiate with Postman/curl using the exact body your app sends:
+And add to his env:
 
+```
+GOOGLE_CLIENT_ID=841792367578-3dnk4at4nbm0pvtpeh0aakeqlefcm8ba.apps.googleusercontent.com
+GOOGLE_IOS_CLIENT_ID=841792367578-t91482k7so8d5tac3qot43es2cumab47.apps.googleusercontent.com
+```
 
-If Postman also gets executor is not a function, it's 100% server-side (no Flutter involved).
+`verifyIdToken` accepts an array, and the token passes if its `aud` matches **any** entry — so iOS hits the second one and Android hits the first.
 
-Get the stack trace, not the message. The API is swallowing it. Have them log err.stack in the initiate handler's catch block. The offending line will be the new Promise(...) / Paystack SDK call.
+(If he later adds a dedicated Android OAuth client, add that client ID to the array too.)
 
-Look for the three classic culprits (from the original diagnosis):
-
-const paystack = require('paystack')(key) returning something that isn't callable, then being invoked as a function.
-A method that returns a value now being passed where a callback belongs (e.g. new Promise(amount) or transaction.initialize(data, amount) instead of (data, callback)).
-An SDK version bump where a method switched from promise-returning to callback-style (or vice-versa).
-If, after my amount alignment, Postman gets the documented 400 "amount mismatch" (not the executor error), then the amount fix matters and we're on the right track. But as long as the message is literally executor is not a function, the ball is in the backend's court.
+No app change needed — you're already sending the correct token; it's purely the backend's `audience` being too strict.

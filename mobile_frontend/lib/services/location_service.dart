@@ -11,9 +11,9 @@ class LocationService {
   }
 
   Map<String, String> _headers(String token) => {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      };
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer $token',
+  };
 
   /// PUT /api/locations — update your current live location
   Future<bool> updateLocation({
@@ -170,7 +170,8 @@ class NearbyCreative {
   final DateTime? updatedAt;
   final String? name;
   final String? role;
-  double? distanceKm; // set by the client after sorting
+  final String? avatarUrl;
+  double? distanceKm; // set by the client for sorting/display
 
   NearbyCreative({
     required this.userId,
@@ -183,6 +184,7 @@ class NearbyCreative {
     this.updatedAt,
     this.name,
     this.role,
+    this.avatarUrl,
     this.distanceKm,
   });
 
@@ -200,6 +202,38 @@ class NearbyCreative {
           : null,
       name: json['name'],
       role: json['role'],
+      avatarUrl:
+          json['profile_photo_url'] ??
+          json['photographer_profile_photo_url'] ??
+          json['avatar_url'] ??
+          json['avatarUrl'],
     );
+  }
+
+  /// True when this creative emitted a location within the last 24 hours.
+  bool get isRecentlyActive {
+    final t = updatedAt;
+    if (t == null) return false;
+    return DateTime.now().difference(t) <= const Duration(hours: 24);
+  }
+
+  /// Compact last-seen label: "now", "12m", "3h", "2d".
+  String get lastSeenLabel {
+    final t = updatedAt;
+    if (t == null) return '';
+    final diff = DateTime.now().difference(t);
+    if (diff.isNegative || diff.inMinutes < 1) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    return '${diff.inDays}d';
+  }
+
+  /// Human-readable form for cards/lists, e.g. "Active now" / "Seen 2h ago".
+  String get lastSeenText {
+    final t = updatedAt;
+    if (t == null) return '';
+    final label = lastSeenLabel;
+    if (label == 'now') return 'Active now';
+    return 'Seen $label ago';
   }
 }

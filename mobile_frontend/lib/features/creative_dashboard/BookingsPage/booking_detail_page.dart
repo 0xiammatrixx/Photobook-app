@@ -253,7 +253,19 @@ class _CreativeBookingDetailPageState
       ];
     }
 
-    // Pending → accept / decline / reschedule.
+    // Pending → accept / decline / reschedule (only while still upcoming).
+    // A past booking can no longer be accepted/declined.
+    if (!session.isUpcoming) {
+      return [
+        Center(
+          child: Text(
+            'This booking has passed.',
+            style: TextStyle(color: Colors.grey[600], fontSize: 13),
+          ),
+        ),
+      ];
+    }
+
     return [
       _primaryButton(label: 'Accept Booking', onPressed: _showBeforeAccept),
       const SizedBox(height: 10),

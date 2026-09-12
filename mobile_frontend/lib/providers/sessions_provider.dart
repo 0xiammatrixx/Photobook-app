@@ -11,6 +11,7 @@ class BookingSession {
   final DateTime scheduledAt;
   final String? location;
   final String? notes;
+  final double? agreedAmount;
 
   BookingSession({
     required this.id,
@@ -21,9 +22,15 @@ class BookingSession {
     required this.scheduledAt,
     this.location,
     this.notes,
+    this.agreedAmount,
   });
 
   bool get isUpcoming => scheduledAt.isAfter(DateTime.now());
+
+  bool get isCancelled {
+    final s = status.toLowerCase();
+    return s.contains('cancel') || s.contains('decline');
+  }
 
   factory BookingSession.fromJson(Map<String, dynamic> json) {
     // ✅ Combine session_date + session_time into a DateTime
@@ -59,9 +66,11 @@ class SessionsProvider extends ChangeNotifier {
 
   List<BookingSession> get sessions => _sessions;
   List<BookingSession> get upcoming =>
-      _sessions.where((s) => s.isUpcoming).toList();
+      _sessions.where((s) => s.isUpcoming && !s.isCancelled).toList();
   List<BookingSession> get past =>
-      _sessions.where((s) => !s.isUpcoming).toList();
+      _sessions.where((s) => !s.isUpcoming && !s.isCancelled).toList();
+  List<BookingSession> get cancelled =>
+      _sessions.where((s) => s.isCancelled).toList();
 
   Future<void> loadSessions({required String token}) async {
     isLoading = true;
@@ -94,6 +103,7 @@ class SessionsProvider extends ChangeNotifier {
               scheduledAt: session.scheduledAt,
               location: session.location,
               notes: session.notes,
+              agreedAmount: session.agreedAmount,
             );
           } catch (_) {
             return session; // fallback to original if fetch fails

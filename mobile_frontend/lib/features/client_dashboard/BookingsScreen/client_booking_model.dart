@@ -12,6 +12,7 @@ class ClientBooking {
   final String? serviceType;
   final DateTime scheduledAt;
   final String status;
+  final String? paymentStatus;
   final double? price;
   final String? location;
   final int? durationMinutes;
@@ -24,10 +25,21 @@ class ClientBooking {
     this.serviceType,
     required this.scheduledAt,
     required this.status,
+    this.paymentStatus,
     this.price,
     this.location,
     this.durationMinutes,
   });
+
+  /// Session ids whose payment is confirmed during this app run. The backend
+  /// keeps `status = "pending"` until the creative accepts the booking, so
+  /// without this the list would keep showing "Pay Now" after a successful
+  /// payment.
+  static final Set<String> _confirmedPaymentSessionIds = {};
+
+  static void markPaymentConfirmed(String sessionId) {
+    _confirmedPaymentSessionIds.add(sessionId);
+  }
 
   bool get isCancelled {
     final s = status.toLowerCase();
@@ -69,6 +81,19 @@ class ClientBooking {
   /// retry/pay — surface a Pay Now action on the detail screen.
   bool get isAwaitingPayment {
     if (isCancelled || isCompleted) return false;
+
+    // Trust the backend's payment_status ('confirmed' | 'pending' | 'failed'
+    // | 'unpaid') when it's present.
+    final ps = (paymentStatus ?? '').toLowerCase();
+    if (ps.isNotEmpty) {
+      return ps != 'confirmed' &&
+          ps != 'paid' &&
+          ps != 'success' &&
+          ps != 'successful';
+    }
+
+    // Fallback for payloads that don't include payment_status yet.
+    if (_confirmedPaymentSessionIds.contains(id)) return false;
     final s = status.toLowerCase();
     return s == 'pending' ||
         s == 'created' ||
@@ -78,12 +103,35 @@ class ClientBooking {
         s.contains('awaiting payment');
   }
 
+  /// True when the backend reports the payment as confirmed (or the payment
+  /// was confirmed locally this session).
+  bool get isPaid {
+    final ps = (paymentStatus ?? '').toLowerCase();
+    if (ps.isNotEmpty) {
+      return ps == 'confirmed' ||
+          ps == 'paid' ||
+          ps == 'success' ||
+          ps == 'successful';
+    }
+    return _confirmedPaymentSessionIds.contains(id);
+  }
+
   bool get sessionHasPassed => sessionEnd.isBefore(DateTime.now());
 
   String get dateLabel {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[scheduledAt.month - 1]} ${scheduledAt.day}, ${scheduledAt.year}';
   }
@@ -122,6 +170,7 @@ class ClientBooking {
       serviceType: serviceType,
       scheduledAt: scheduledAt,
       status: status,
+      paymentStatus: paymentStatus,
       price: price,
       location: location,
       durationMinutes: durationMinutes,
@@ -142,15 +191,21 @@ class ClientBooking {
       final time = json['session_time'] ?? '00:00';
       final dateOnly = date.toString().split('T')[0];
       final timeOnly = time.toString().trim();
-      scheduledAt = DateTime.parse('${dateOnly}T'
-          '${timeOnly.padLeft(5, '0').substring(0, 5)}:00');
+      scheduledAt = DateTime.parse(
+        '${dateOnly}T'
+        '${timeOnly.padLeft(5, '0').substring(0, 5)}:00',
+      );
     } catch (_) {
       scheduledAt = DateTime.now();
     }
 
     double? price;
     for (final key in [
-      'price', 'amount', 'total_price', 'total_amount', 'pricing_amount',
+      'price',
+      'amount',
+      'total_price',
+      'total_amount',
+      'pricing_amount',
       'agreed_amount',
     ]) {
       final v = double.tryParse((json[key] ?? '').toString());
@@ -162,7 +217,9 @@ class ClientBooking {
 
     int? duration;
     for (final key in [
-      'estimated_duration_minutes', 'duration_minutes', 'duration',
+      'estimated_duration_minutes',
+      'duration_minutes',
+      'duration',
     ]) {
       final v = int.tryParse((json[key] ?? '').toString());
       if (v != null && v > 0) {
@@ -199,9 +256,10 @@ class ClientBooking {
               ?.toString(),
       scheduledAt: scheduledAt,
       status: json['status']?.toString() ?? 'pending',
+      paymentStatus: (json['payment_status'] ?? json['paymentStatus'])
+          ?.toString(),
       price: price,
-      location:
-          (json['location_text'] ?? json['location'])?.toString(),
+      location: (json['location_text'] ?? json['location'])?.toString(),
       durationMinutes: duration,
     );
   }

@@ -25,6 +25,8 @@ import 'services/authservice.dart';
 import 'services/push_notification_service.dart';
 import 'services/notification_service.dart';
 import 'app/in_app_banner.dart';
+import 'app/connectivity_provider.dart';
+import 'app/offline_banner.dart';
 import 'app/splashscreen/splashscreen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -66,6 +68,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => CallProvider()),
         ChangeNotifierProvider(create: (_) => LocationProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
       ],
       child: MyApp(
         initialUser: tokenValid ? userProvider.user : null,
@@ -279,6 +282,8 @@ class _MyAppState extends State<MyApp> {
         ),
       ),
       home: _getStartPage(),
+      builder: (context, child) =>
+          ConnectivityOverlay(child: child ?? const SizedBox.shrink()),
     );
   }
 

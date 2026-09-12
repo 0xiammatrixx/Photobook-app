@@ -80,8 +80,7 @@ class _HubScreenState extends State<HubScreen> {
                 onChanged: (v) =>
                     context.read<SearchProvider>().onSearchChanged(v),
                 decoration: InputDecoration(
-                  hintText:
-                      "Search for creatives by style, genre, location...",
+                  hintText: "Search for creatives by style, genre, location...",
                   fillColor: Colors.orange.shade50,
                   filled: true,
                   prefixIcon: const Icon(Icons.search),
@@ -106,8 +105,7 @@ class _HubScreenState extends State<HubScreen> {
                     onPressed: () {},
                     child: const Text(
                       "See all",
-                      style: TextStyle(
-                          color: Color(0xFFFF7A33), fontSize: 13),
+                      style: TextStyle(color: Color(0xFFFF7A33), fontSize: 13),
                     ),
                   ),
                 ],
@@ -121,7 +119,9 @@ class _HubScreenState extends State<HubScreen> {
                   itemBuilder: (context, index) {
                     final cat = _categories[index];
                     return _CategoryTile(
-                        label: cat['label']!, image: cat['image']!);
+                      label: cat['label']!,
+                      image: cat['image']!,
+                    );
                   },
                 ),
               ),
@@ -161,51 +161,54 @@ class _HubScreenState extends State<HubScreen> {
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: ['All', 'Photography', 'Videography', 'Content Creators']
-                    .map(
-                      (f) => GestureDetector(
-                        onTap: () {
-                          setState(() => _filter = f);
-                          final role = switch (f) {
-                            'Photography' => 'photographer',
-                            'Videography' => 'videographer',
-                            'Content Creators' => 'content_creator',
-                            _ => 'all',
-                          };
-                          context
-                              .read<SearchProvider>()
-                              .loadHubCreatives(role);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: _filter == f
-                                ? const Color(0xFFFF7A33)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: _filter == f
-                                  ? const Color(0xFFFF7A33)
-                                  : Colors.grey.shade300,
+                children:
+                    ['All', 'Photography', 'Videography', 'Content Creators']
+                        .map(
+                          (f) => GestureDetector(
+                            onTap: () {
+                              setState(() => _filter = f);
+                              final role = switch (f) {
+                                'Photography' => 'photographer',
+                                'Videography' => 'videographer',
+                                'Content Creators' => 'content_creator',
+                                _ => 'all',
+                              };
+                              context.read<SearchProvider>().loadHubCreatives(
+                                role,
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _filter == f
+                                    ? const Color(0xFFFF7A33)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: _filter == f
+                                      ? const Color(0xFFFF7A33)
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                              child: Text(
+                                f,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: _filter == f
+                                      ? Colors.white
+                                      : Colors.black,
+                                  fontWeight: _filter == f
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                              ),
                             ),
                           ),
-                          child: Text(
-                            f,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _filter == f
-                                  ? Colors.white
-                                  : Colors.black,
-                              fontWeight: _filter == f
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
+                        )
+                        .toList(),
               ),
               const SizedBox(height: 12),
 
@@ -218,11 +221,11 @@ class _HubScreenState extends State<HubScreen> {
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 0.72,
-                      ),
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 0.72,
+                          ),
                       itemCount: 6,
                       itemBuilder: (context, index) => const SkeletonPulse(
                         child: SkeletonBox(
@@ -239,14 +242,15 @@ class _HubScreenState extends State<HubScreen> {
                   // endpoint, so try all the common user id field names.
                   final seen = <String>{};
                   final creatives = searchProvider.hubCreatives.where((p) {
-                    final key = (p['photographer_id'] ??
-                            p['photographerId'] ??
-                            p['user_id'] ??
-                            p['id'] ??
-                            p['business_name'] ??
-                            p['businessName'] ??
-                            '')
-                        .toString();
+                    final key =
+                        (p['photographer_id'] ??
+                                p['photographerId'] ??
+                                p['user_id'] ??
+                                p['id'] ??
+                                p['business_name'] ??
+                                p['businessName'] ??
+                                '')
+                            .toString();
                     if (key.isEmpty) return true;
                     if (seen.contains(key)) return false;
                     seen.add(key);
@@ -257,8 +261,10 @@ class _HubScreenState extends State<HubScreen> {
                     return const Padding(
                       padding: EdgeInsets.all(32),
                       child: Center(
-                        child: Text('No creatives found',
-                            style: TextStyle(color: Colors.grey)),
+                        child: Text(
+                          'No creatives found',
+                          style: TextStyle(color: Colors.grey),
+                        ),
                       ),
                     );
                   }
@@ -268,11 +274,11 @@ class _HubScreenState extends State<HubScreen> {
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      childAspectRatio: 0.72,
-                    ),
+                          crossAxisCount: 3,
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
+                          childAspectRatio: 0.72,
+                        ),
                     itemCount: creatives.length,
                     itemBuilder: (context, index) =>
                         _CreativeCard(creative: creatives[index]),
@@ -333,6 +339,7 @@ class _StyleCard extends StatelessWidget {
   final String label;
   final String image;
   final bool overlayText;
+
   const _StyleCard({
     required this.label,
     required this.image,
@@ -361,10 +368,7 @@ class _StyleCard extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.7),
-                  ],
+                  colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
                 ),
               ),
               child: Text(
@@ -389,27 +393,26 @@ class _CreativeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name =
-        creative['business_name'] ?? creative['name'] ?? 'Creative';
-    final avatarUrl = creative['photographer_profile_photo_url'] ??
+    final name = creative['business_name'] ?? creative['name'] ?? 'Creative';
+    final avatarUrl =
+        creative['photographer_profile_photo_url'] ??
         creative['avatarUrl'] ??
         creative['profile_photo_url'];
-    final id = creative['photographer_id'] ??
+    final id =
+        creative['photographer_id'] ??
         creative['photographerId'] ??
         creative['user_id'] ??
         creative['id'] ??
         '';
     final role = creative['display_title'] ?? 'Photographer';
-    final rating = double.tryParse(
-            creative['star_rating']?.toString() ?? '0') ??
-        0.0;
+    final rating =
+        double.tryParse(creative['star_rating']?.toString() ?? '0') ?? 0.0;
 
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              CreativeProfilePage(isOwner: false, creativeId: id),
+          builder: (_) => CreativeProfilePage(isOwner: false, creativeId: id),
         ),
       ),
       child: Container(
@@ -422,8 +425,9 @@ class _CreativeCard extends StatelessWidget {
           children: [
             Expanded(
               child: ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(15)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(15),
+                ),
                 child: SizedBox(
                   width: double.infinity,
                   child: avatarUrl != null
@@ -433,16 +437,22 @@ class _CreativeCard extends StatelessWidget {
                           errorBuilder: (_, __, ___) => Container(
                             color: const Color(0xFFE8F5E9),
                             child: const Center(
-                              child: Icon(Icons.person,
-                                  size: 40, color: Colors.grey),
+                              child: Icon(
+                                Icons.person,
+                                size: 40,
+                                color: Colors.grey,
+                              ),
                             ),
                           ),
                         )
                       : Container(
                           color: const Color(0xFFE8F5E9),
                           child: const Center(
-                            child: Icon(Icons.person,
-                                size: 40, color: Colors.grey),
+                            child: Icon(
+                              Icons.person,
+                              size: 40,
+                              color: Colors.grey,
+                            ),
                           ),
                         ),
                 ),
@@ -456,14 +466,15 @@ class _CreativeCard extends StatelessWidget {
                   Text(
                     name,
                     style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 12),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
                     role,
-                    style: const TextStyle(
-                        fontSize: 10, color: Colors.grey),
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -472,9 +483,7 @@ class _CreativeCard extends StatelessWidget {
                     children: List.generate(
                       5,
                       (i) => Icon(
-                        i < rating.round()
-                            ? Icons.star
-                            : Icons.star_border,
+                        i < rating.round() ? Icons.star : Icons.star_border,
                         size: 12,
                         color: Colors.orange,
                       ),
@@ -485,8 +494,8 @@ class _CreativeCard extends StatelessWidget {
                     onPressed: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => CreativeProfilePage(
-                            isOwner: false, creativeId: id),
+                        builder: (_) =>
+                            CreativeProfilePage(isOwner: false, creativeId: id),
                       ),
                     ),
                     style: TextButton.styleFrom(
@@ -496,8 +505,7 @@ class _CreativeCard extends StatelessWidget {
                     ),
                     child: const Text(
                       'View Profile',
-                      style:
-                          TextStyle(fontSize: 10, color: Color(0xFFFF7A33)),
+                      style: TextStyle(fontSize: 10, color: Color(0xFFFF7A33)),
                     ),
                   ),
                 ],

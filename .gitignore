@@ -2,3 +2,7 @@
 backend/node_modules/
 backend/.env
 
+# macOS
+.DS_Store
+**/.DS_Store
+

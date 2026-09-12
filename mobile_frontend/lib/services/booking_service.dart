@@ -28,10 +28,10 @@ class BookingService {
         'https://nominatim.openstreetmap.org/search'
         '?q=${Uri.encodeComponent(query)}&format=json&limit=5',
       );
-      final res = await http.get(uri, headers: {
-        'User-Agent': 'PhotoBookApp/1.0',
-        'Accept-Language': 'en',
-      });
+      final res = await http.get(
+        uri,
+        headers: {'User-Agent': 'PhotoBookApp/1.0', 'Accept-Language': 'en'},
+      );
       if (res.statusCode == 200) {
         return List<Map<String, dynamic>>.from(jsonDecode(res.body));
       }
@@ -58,6 +58,48 @@ class BookingService {
     } else {
       throw Exception('Failed to load sessions (${response.statusCode})');
     }
+  }
+
+  /// GET /api/sessions?photographerId={id} — the photographer's existing
+  /// bookings, used to grey out already-booked time slots on the booking form.
+  /// Returns an empty list when the endpoint is unavailable so the form still
+  /// works (the backend also validates conflicts on create).
+  Future<List<Map<String, dynamic>>> getPhotographerBookedSlots({
+    required String token,
+    required String photographerId,
+  }) async {
+    final candidates = [
+      '$baseUrl/sessions?photographerId=$photographerId',
+      '$baseUrl/photographers/$photographerId/sessions',
+    ];
+    for (final url in candidates) {
+      try {
+        final response = await http.get(
+          Uri.parse(url),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (response.statusCode != 200) continue;
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          return data
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+        }
+        if (data is Map) {
+          final list = data['sessions'] ?? data['items'] ?? data['data'];
+          if (list is List) {
+            return list
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+          }
+        }
+      } catch (_) {
+        // Try the next candidate endpoint.
+      }
+    }
+    return [];
   }
 
   Future<List<dynamic>> getEventTypes({required String token}) async {

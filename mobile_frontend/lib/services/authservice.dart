@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,8 +8,14 @@ class AuthService {
   static const String baseUrl = 'https://api.photobookhq.com/api/auth';
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
+    // On Android, `clientId` makes the SDK return an ID token (aud = web
+    // client). On iOS we leave it unset so it uses the iOS GIDClientID from
+    // Info.plist (aud = iOS client) — the backend verifies against both.
+    clientId: Platform.isIOS
+        ? null
+        : '841792367578-3dnk4at4nbm0pvtpeh0aakeqlefcm8ba.apps.googleusercontent.com',
     serverClientId:
-        '586439540009-ele8av8d6u8sm24unkr5edu74vfhiip9.apps.googleusercontent.com',
+        '841792367578-3dnk4at4nbm0pvtpeh0aakeqlefcm8ba.apps.googleusercontent.com',
   );
 
   /// Save token + user locally
@@ -33,9 +40,7 @@ class AuthService {
 
       // 2FA required — backend returns temp token, no user yet
       if (data['requires2FA'] == true || data['tempToken'] != null) {
-        return LoginRequires2FA(
-          tempToken: data['tempToken'] ?? data['token'],
-        );
+        return LoginRequires2FA(tempToken: data['tempToken'] ?? data['token']);
       }
 
       final user = data['user'];
@@ -128,7 +133,14 @@ class AuthService {
       final account = await _googleSignIn.signIn();
       if (account == null) return null;
 
-      // Send the full profile object the backend expects
+      // Native Google sign-in returns a verifiable ID token (JWT). Because
+      // serverClientId is configured, a one-time server auth code is also
+      // available for the backend to exchange. Send both + the profile as a
+      // convenience, so the backend can verify the token securely.
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      final serverAuthCode = auth.serverAuthCode;
+
       final profile = {
         "id": account.id,
         "email": account.email,
@@ -136,12 +148,19 @@ class AuthService {
         "photoUrl": account.photoUrl,
       };
 
-      print("📤 Google profile: $profile");
+      print(
+        '📤 Google sign-in: idToken=${idToken != null}, '
+        'serverAuthCode=${serverAuthCode != null}',
+      );
 
       final res = await http.post(
-        Uri.parse('$baseUrl/auth/google'), // ✅ fixed URL
+        Uri.parse('$baseUrl/google'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'profile': profile}),
+        body: jsonEncode({
+          if (idToken != null) 'idToken': idToken,
+          if (serverAuthCode != null) 'serverAuthCode': serverAuthCode,
+          'profile': profile,
+        }),
       );
 
       print("📥 Google login response: ${res.statusCode} ${res.body}");

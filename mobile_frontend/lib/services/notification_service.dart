@@ -111,10 +111,31 @@ class AppNotification {
       body: json['body'] ?? json['message'] ?? '',
       data: json['data'] is Map ? Map<String, dynamic>.from(json['data']) : null,
       read: json['read'] == true,
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'])
-          : DateTime.now(),
+      createdAt: _parseCreatedAt(json),
     );
+  }
+
+  /// Parse the notification timestamp from any of the common field names the
+  /// API may use (`created_at`, `createdAt`, `timestamp`, `date`, `created`).
+  /// Accepts ISO strings and epoch millis/seconds. Only falls back to `now`
+  /// when the timestamp is genuinely absent, so times don't all read "just now".
+  static DateTime _parseCreatedAt(Map<String, dynamic> json) {
+    for (final key in [
+      'created_at', 'createdAt', 'timestamp', 'date', 'created',
+    ]) {
+      final value = json[key];
+      if (value == null) continue;
+
+      if (value is num) {
+        final ms = value.toInt();
+        // Distinguish epoch millis (~1.7e12) from seconds (~1.7e9).
+        return DateTime.fromMillisecondsSinceEpoch(ms > 1e12 ? ms : ms * 1000);
+      }
+
+      final parsed = DateTime.tryParse(value.toString());
+      if (parsed != null) return parsed;
+    }
+    return DateTime.now();
   }
 
   IconData get icon {

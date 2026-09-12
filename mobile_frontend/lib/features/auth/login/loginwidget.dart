@@ -8,7 +8,7 @@ import 'package:mobile_frontend/services/push_notification_service.dart';
 import 'package:mobile_frontend/app/buttons.dart';
 import 'package:mobile_frontend/providers/user_provider.dart';
 import 'package:mobile_frontend/features/auth/passwordreset/passwordresetscreen.dart';
-import 'package:mobile_frontend/features/auth/signup/signUpScreen.dart';
+import 'package:mobile_frontend/features/auth/signup/SignUpScreen.dart';
 import 'package:mobile_frontend/features/client_dashboard/bottom_nav_bar.dart';
 import 'package:mobile_frontend/features/creative_dashboard/bottom_nav_bar.dart';
 import 'package:provider/provider.dart';
@@ -106,10 +106,7 @@ class _LoginFormState extends State<LoginForm> {
         final user = data['user'];
         final token = data['token'];
         Provider.of<UserProvider>(context, listen: false).setUser(user, token);
-        context.read<ChatProvider>().connectSocket(
-          user['token'],
-          user['id'], // ✅
-        );
+        context.read<ChatProvider>().connectSocket(token, user['id'] ?? '');
         // Register this device for push notifications.
         PushNotificationService().registerCurrentToken();
 

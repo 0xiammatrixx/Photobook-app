@@ -72,13 +72,13 @@ class _CreativeBottomTabsState extends State<CreativeBottomTabs> {
         items: [
           BottomNavigationBarItem(
             icon: SvgPicture.asset(
-              'assets/home_icon.svg',
+              'assets/homeicon.svg',
               width: 24,
               height: 24,
               color: Colors.black,
             ),
             activeIcon: SvgPicture.asset(
-              "assets/home_icon.svg",
+              "assets/homeicon.svg",
               width: 24,
               height: 24,
               color: Color(0xFFFF7A33),
@@ -87,13 +87,13 @@ class _CreativeBottomTabsState extends State<CreativeBottomTabs> {
           ),
           BottomNavigationBarItem(
             icon: SvgPicture.asset(
-              'assets/bookings_icon.svg',
+              'assets/clientbooking.svg',
               width: 24,
               height: 24,
               color: Colors.black,
             ),
             activeIcon: SvgPicture.asset(
-              "assets/bookings_icon.svg",
+              "assets/clientbooking.svg",
               width: 24,
               height: 24,
               color: Color(0xFFFF7A33),
@@ -112,7 +112,7 @@ class _CreativeBottomTabsState extends State<CreativeBottomTabs> {
                   clipBehavior: Clip.none,
                   children: [
                     SvgPicture.asset(
-                      'assets/chat_icon.svg',
+                      'assets/chaticon.svg',
                       width: 24,
                       height: 24,
                       color: Colors.black,
@@ -147,7 +147,7 @@ class _CreativeBottomTabsState extends State<CreativeBottomTabs> {
               },
             ),
             activeIcon: SvgPicture.asset(
-              'assets/chat_icon.svg',
+              'assets/chaticon.svg',
               width: 24,
               height: 24,
               color: Color(0xFFFF7A33),
@@ -156,13 +156,13 @@ class _CreativeBottomTabsState extends State<CreativeBottomTabs> {
           ),
           BottomNavigationBarItem(
             icon: SvgPicture.asset(
-              'assets/profile_icon.svg',
+              'assets/profileicon.svg',
               width: 24,
               height: 24,
               color: Colors.black,
             ),
             activeIcon: SvgPicture.asset(
-              "assets/profile_icon.svg",
+              "assets/profileicon.svg",
               width: 24,
               height: 24,
               color: Color(0xFFFF7A33),

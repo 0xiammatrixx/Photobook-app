@@ -52,8 +52,10 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<SearchProvider>().loadTopPhotographers();
     });
     _searchFocus.addListener(() {
-      setState(() => _showDropdown =
-          _searchFocus.hasFocus && _searchController.text.isNotEmpty);
+      setState(
+        () => _showDropdown =
+            _searchFocus.hasFocus && _searchController.text.isNotEmpty,
+      );
     });
     _getLocation();
   }
@@ -90,6 +92,89 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  /// Map bubble: the creative's initial in a pin circle, with a compact
+  /// "last seen" label below it (e.g. "2h", "13h").
+  Widget _mapBubble(NearbyCreative c) {
+    final initial = (c.name?.isNotEmpty == true)
+        ? c.name![0].toUpperCase()
+        : 'C';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  CreativeProfilePage(isOwner: false, creativeId: c.userId),
+            ),
+          ),
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF7A33),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.25),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: (c.avatarUrl?.isNotEmpty == true)
+                ? ClipOval(
+                    child: Image.network(
+                      c.avatarUrl!,
+                      width: 30,
+                      height: 30,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Text(
+                        initial,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  )
+                : Text(
+                    initial,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+          ),
+        ),
+        if (c.lastSeenLabel.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+            ),
+            child: Text(
+              c.lastSeenLabel,
+              style: const TextStyle(
+                fontSize: 9,
+                color: Colors.black87,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<UserProvider>(context).user;
@@ -124,7 +209,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       Consumer<LocationProvider>(
                         builder: (_, loc, __) => Text(
                           loc.currentCity ?? 'Loading location...',
-                          style: const TextStyle(color: Colors.grey, fontSize: 13),
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
@@ -136,7 +224,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) => const NotificationsPage()),
+                          builder: (_) => const NotificationsPage(),
+                        ),
                       );
                     },
                     child: Stack(
@@ -192,9 +281,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: _services.length,
-                  itemBuilder: (context, index) => _ServiceCard(
-                    image: _services[index]['image']!,
-                  ),
+                  itemBuilder: (context, index) =>
+                      _ServiceCard(image: _services[index]['image']!),
                 ),
               ),
               const SizedBox(height: 10),
@@ -226,8 +314,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: 3,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(width: 12),
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
                         itemBuilder: (_, __) => const SkeletonPulse(
                           child: SkeletonBox(
                             width: 140,
@@ -246,7 +333,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.location_off, size: 40, color: Colors.grey.shade400),
+                            Icon(
+                              Icons.location_off,
+                              size: 40,
+                              color: Colors.grey.shade400,
+                            ),
                             const SizedBox(height: 8),
                             const Text(
                               "No creatives nearby yet",
@@ -254,7 +345,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             const Text(
                               "Enable location sharing to see creatives near you",
-                              style: TextStyle(color: Colors.grey, fontSize: 12),
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
@@ -310,33 +404,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                     color: Colors.blue,
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                        color: Colors.white, width: 2),
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
                                   ),
                                 ),
                               ),
                               for (final c in locProvider.nearbyCreatives)
                                 Marker(
                                   point: LatLng(c.latitude, c.longitude),
-                                  width: 36,
-                                  height: 36,
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => CreativeProfilePage(
-                                            isOwner: false,
-                                            creativeId: c.userId,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    child: const Icon(
-                                      Icons.location_pin,
-                                      color: Color(0xFFFF7A33),
-                                      size: 36,
-                                    ),
-                                  ),
+                                  width: 48,
+                                  height: 58,
+                                  child: _mapBubble(c),
                                 ),
                             ];
                             return Stack(
@@ -363,15 +442,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                     bottom: 10,
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 14, vertical: 10),
+                                        horizontal: 14,
+                                        vertical: 10,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: Colors.white,
-                                        borderRadius:
-                                            BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(12),
                                         boxShadow: [
                                           BoxShadow(
-                                            color:
-                                                Colors.black.withOpacity(0.15),
+                                            color: Colors.black.withOpacity(
+                                              0.15,
+                                            ),
                                             blurRadius: 8,
                                             offset: const Offset(0, 2),
                                           ),
@@ -383,14 +464,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Text(
-                                            '${locProvider.nearbyCreatives.length} creatives nearby',
+                                            '${locProvider.nearbyCreatives.length} creatives online',
                                             style: const TextStyle(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 13,
                                             ),
                                           ),
                                           const Text(
-                                            'Within 45mins drive',
+                                            'Active in the last 24 hours',
                                             style: TextStyle(
                                               fontSize: 11,
                                               color: Colors.grey,
@@ -481,26 +562,46 @@ class _HomeScreenState extends State<HomeScreen> {
                 _DropdownHeader(label: "Photographers"),
                 ...photographers.map((p) {
                   final name = p['business_name'] ?? p['name'] ?? 'Unknown';
-                  final avatarUrl = p['photographer_profile_photo_url'] ?? p['avatarUrl'];
+                  final avatarUrl =
+                      p['photographer_profile_photo_url'] ?? p['avatarUrl'];
                   final id = p['id'] ?? p['user_id'] ?? '';
                   final displayTitle = p['display_title'] ?? 'Photographer';
                   return ListTile(
                     dense: true,
                     leading: CircleAvatar(
                       radius: 18,
-                      backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                      child: avatarUrl == null ? const Icon(Icons.person, size: 18) : null,
+                      backgroundImage: avatarUrl != null
+                          ? NetworkImage(avatarUrl)
+                          : null,
+                      child: avatarUrl == null
+                          ? const Icon(Icons.person, size: 18)
+                          : null,
                     ),
-                    title: Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    subtitle: Text(displayTitle, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    title: Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      displayTitle,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
                     onTap: () {
                       _searchController.clear();
                       context.read<SearchProvider>().clearSearch();
                       setState(() => _showDropdown = false);
                       _searchFocus.unfocus();
-                      Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => CreativeProfilePage(isOwner: false, creativeId: id),
-                      ));
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CreativeProfilePage(
+                            isOwner: false,
+                            creativeId: id,
+                          ),
+                        ),
+                      );
                     },
                   );
                 }),
@@ -510,33 +611,62 @@ class _HomeScreenState extends State<HomeScreen> {
               if (tags.isNotEmpty) ...[
                 _DropdownHeader(label: "Categories"),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   child: Wrap(
                     spacing: 8,
                     runSpacing: 6,
-                    children: tags.map((tag) => GestureDetector(
-                      onTap: () {
-                        _searchController.text = tag;
-                        context.read<SearchProvider>().onSearchChanged(tag);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF7A33).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFFF7A33), width: 0.8),
-                        ),
-                        child: Text(tag, style: const TextStyle(fontSize: 11, color: Color(0xFFFF7A33))),
-                      ),
-                    )).toList(),
+                    children: tags
+                        .map(
+                          (tag) => GestureDetector(
+                            onTap: () {
+                              _searchController.text = tag;
+                              context.read<SearchProvider>().onSearchChanged(
+                                tag,
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF7A33).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: const Color(0xFFFF7A33),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                tag,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFFFF7A33),
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
                 ),
               ],
               if (searchProvider.isSearching)
                 const Padding(
                   padding: EdgeInsets.all(12),
-                  child: Center(child: SizedBox(height: 16, width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF7A33)))),
+                  child: Center(
+                    child: SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFFF7A33),
+                      ),
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -571,9 +701,7 @@ class _ServiceCard extends StatelessWidget {
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Container(
               color: const Color(0xFFFFE0CC),
-              child: const Center(
-                child: Icon(Icons.image, color: Colors.grey),
-              ),
+              child: const Center(child: Icon(Icons.image, color: Colors.grey)),
             ),
           ),
         ),
@@ -594,10 +722,13 @@ class _NearbyCard extends StatelessWidget {
     final km = creative.distanceKm;
 
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(
-        builder: (_) => CreativeProfilePage(
-            isOwner: false, creativeId: creative.userId),
-      )),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              CreativeProfilePage(isOwner: false, creativeId: creative.userId),
+        ),
+      ),
       child: Container(
         width: 140,
         margin: const EdgeInsets.only(right: 12),
@@ -624,11 +755,15 @@ class _NearbyCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 12),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   Text(
                     role == 'photographer' ? 'Photographer' : role,
                     style: const TextStyle(fontSize: 10, color: Colors.grey),
@@ -639,32 +774,62 @@ class _NearbyCard extends StatelessWidget {
                   if (km != null)
                     Row(
                       children: [
-                        const Icon(Icons.location_on,
-                            size: 12, color: Color(0xFFFF7A33)),
+                        const Icon(
+                          Icons.location_on,
+                          size: 12,
+                          color: Color(0xFFFF7A33),
+                        ),
                         const SizedBox(width: 2),
                         Text(
                           '${km.toStringAsFixed(1)} km',
                           style: const TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFFFF7A33),
-                              fontWeight: FontWeight.w600),
+                            fontSize: 11,
+                            color: Color(0xFFFF7A33),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
+                  if (creative.lastSeenText.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.schedule,
+                          size: 11,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          creative.lastSeenText,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   TextButton(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => CreativeProfilePage(
-                          isOwner: false, creativeId: creative.userId),
-                    )),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CreativeProfilePage(
+                          isOwner: false,
+                          creativeId: creative.userId,
+                        ),
+                      ),
+                    ),
                     style: TextButton.styleFrom(
                       padding: EdgeInsets.zero,
                       minimumSize: const Size(0, 0),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    child: const Text("View Profile",
-                        style: TextStyle(
-                            fontSize: 10, color: Color(0xFFFF7A33))),
+                    child: const Text(
+                      "View Profile",
+                      style: TextStyle(fontSize: 10, color: Color(0xFFFF7A33)),
+                    ),
                   ),
                 ],
               ),
@@ -684,9 +849,15 @@ class _DropdownHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 12, top: 10, bottom: 2),
-      child: Text(label.toUpperCase(),
-          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold,
-              color: Colors.grey.shade500, letterSpacing: 0.8)),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: Colors.grey.shade500,
+          letterSpacing: 0.8,
+        ),
+      ),
     );
   }
 }

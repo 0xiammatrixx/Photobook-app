@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:mobile_frontend/app/empty_state.dart';
 import 'package:mobile_frontend/app/skeleton.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -644,8 +645,8 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection>
  
   Widget _buildPortfolioGrid(List<Map<String, dynamic>> portfolio) {
     if (portfolio.isEmpty) {
-      return _EmptyState(
-        asset: 'assets/emptyportfolio.png',
+      return EmptyState(
+        asset: 'assets/emptyportfolio.svg',
         title: 'No portfolio projects yet',
         subtitle:
             'Add samples of your work to showcase your style and attract client.',
@@ -743,8 +744,8 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection>
       );
     }
     if (_reviews.isEmpty) {
-      return _EmptyState(
-        asset: 'assets/emptyreview.png',
+      return EmptyState(
+        asset: 'assets/emptyreview.svg',
         title: 'No Reviews Yet',
         subtitle: widget.isOwner
             ? 'Complete your first booking and deliver a great experience to '
@@ -775,44 +776,6 @@ class _PortfolioReviewSectionState extends State<PortfolioReviewSection>
             ),
           ),
       ],
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final String asset;
-  final String title;
-  final String subtitle;
-  final Widget? action;
-
-  const _EmptyState({
-    required this.asset,
-    required this.title,
-    required this.subtitle,
-    this.action,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Column(
-        children: [
-          Image.asset(asset, width: 140, height: 140, fit: BoxFit.contain),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          ),
-          if (action != null) ...[const SizedBox(height: 14), action!],
-        ],
-      ),
     );
   }
 }

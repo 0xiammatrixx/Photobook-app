@@ -2,7 +2,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:mobile_frontend/app/buttons.dart';
-import 'package:mobile_frontend/features/auth/signup/signUpScreen.dart';
+import 'package:mobile_frontend/features/auth/signup/SignUpScreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingPage extends StatefulWidget {

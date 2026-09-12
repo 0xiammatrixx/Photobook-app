@@ -43,6 +43,28 @@ class _EditProfilePageState extends State<EditProfilePage> {
     setState(() => _categories.remove(cat));
   }
 
+  bool _hasRole(String tag) => _categories.contains(tag);
+
+  void _toggleRole(String tag) {
+    setState(() {
+      if (_categories.contains(tag)) {
+        _categories.remove(tag);
+      } else {
+        _categories.add(tag);
+      }
+    });
+  }
+
+  Widget _roleCheckbox(String label, String tag) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Checkbox(value: _hasRole(tag), onChanged: (_) => _toggleRole(tag)),
+        Text(label),
+      ],
+    );
+  }
+
   Future<void> _loadCurrentProfile() async {
     try {
       final profileProvider = Provider.of<ProfileProvider>(
@@ -301,6 +323,19 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ///Tags
               const Text("Tags", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
+
+              // Services (roles) — stored as role tags the booking form reads.
+              Wrap(
+                spacing: 16,
+                runSpacing: 4,
+                children: [
+                  _roleCheckbox('Photographer', 'photographer'),
+                  _roleCheckbox('Videographer', 'videographer'),
+                  _roleCheckbox('Content Creator', 'content_creator'),
+                ],
+              ),
+              const SizedBox(height: 8),
+
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 8,

@@ -34,12 +34,19 @@ class LocationProvider extends ChangeNotifier {
 
     try {
       final list = await _service.getNearby();
+      // Only creatives that emitted a location in the last 24h. Distance is
+      // used for sorting/display on the list, but NOT to hide anyone — every
+      // recent creative still shows on the map.
       for (final c in list) {
         c.distanceKm = _haversine(lat, lng, c.latitude, c.longitude);
       }
-      list.sort((a, b) => (a.distanceKm ?? double.infinity)
-          .compareTo(b.distanceKm ?? double.infinity));
-      _nearbyCreatives = list;
+      final recent = list.where((c) => c.isRecentlyActive).toList();
+      recent.sort(
+        (a, b) => (a.distanceKm ?? double.infinity).compareTo(
+          b.distanceKm ?? double.infinity,
+        ),
+      );
+      _nearbyCreatives = recent;
     } catch (e) {
       print('❌ loadNearby error: $e');
     } finally {
@@ -90,15 +97,16 @@ class LocationProvider extends ChangeNotifier {
         'https://nominatim.openstreetmap.org/reverse'
         '?lat=$lat&lon=$lng&format=json&zoom=10',
       );
-      final res = await http.get(uri, headers: {
-        'User-Agent': 'PhotoBookApp/1.0',
-        'Accept-Language': 'en',
-      });
+      final res = await http.get(
+        uri,
+        headers: {'User-Agent': 'PhotoBookApp/1.0', 'Accept-Language': 'en'},
+      );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final address = data['address'] as Map<String, dynamic>?;
         if (address != null) {
-          _currentCity = address['city'] ??
+          _currentCity =
+              address['city'] ??
               address['town'] ??
               address['state'] ??
               address['country'];
@@ -124,10 +132,10 @@ class LocationProvider extends ChangeNotifier {
         'https://nominatim.openstreetmap.org/reverse'
         '?lat=$lat&lon=$lng&format=json&zoom=10',
       );
-      final res = await http.get(uri, headers: {
-        'User-Agent': 'PhotoBookApp/1.0',
-        'Accept-Language': 'en',
-      });
+      final res = await http.get(
+        uri,
+        headers: {'User-Agent': 'PhotoBookApp/1.0', 'Accept-Language': 'en'},
+      );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final address = data['address'] as Map<String, dynamic>?;
@@ -150,15 +158,13 @@ class LocationProvider extends ChangeNotifier {
   }
 
   // ── Haversine formula ──
-  static double _haversine(
-    double lat1, double lng1, double lat2, double lng2,
-  ) {
+  static double _haversine(double lat1, double lng1, double lat2, double lng2) {
     const R = 6371.0;
     final dLat = _toRad(lat2 - lat1);
     final dLng = _toRad(lng2 - lng1);
-    final a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(_toRad(lat1)) * cos(_toRad(lat2)) *
-            sin(dLng / 2) * sin(dLng / 2);
+    final a =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(_toRad(lat1)) * cos(_toRad(lat2)) * sin(dLng / 2) * sin(dLng / 2);
     final c = 2 * atan2(sqrt(a), sqrt(1 - a));
     return R * c;
   }

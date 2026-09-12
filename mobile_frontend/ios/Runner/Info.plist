@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>GIDClientID</key>
-	<string>586439540009ele8av8d6u8sm24unkr5edu74vfhiip9.apps.googleusercontent.com</string>
+	<string>841792367578-t91482k7so8d5tac3qot43es2cumab47.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -11,7 +11,17 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.586439540009ele8av8d6u8sm24unkr5edu74vfhiip9</string>
+				<string>com.googleusercontent.apps.841792367578-t91482k7so8d5tac3qot43es2cumab47</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.photobook.payments</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>photobook</string>
 			</array>
 		</dict>
 	</array>

@@ -40,10 +40,28 @@ class _CreativeBookingsPageState extends State<CreativeBookingsPage> {
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: const Text(
-                    "Bookings",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: Row(
+                    children: [
+                      if (Navigator.of(context).canPop())
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: InkWell(
+                            onTap: () => Navigator.pop(context),
+                            child: const Icon(
+                              Icons.arrow_back,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                      const Text(
+                        "Bookings",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -110,6 +128,29 @@ class _CreativeBookingsPageState extends State<CreativeBookingsPage> {
                     ),
                   ),
                 ],
+
+                // Cancelled
+                if (provider.cancelled.isNotEmpty) ...[
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                      child: Text(
+                        "Cancelled (${provider.cancelled.length})",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) =>
+                          _BookingCard(session: provider.cancelled[index]),
+                      childCount: provider.cancelled.length,
+                    ),
+                  ),
+                ],
               ],
 
               const SliverToBoxAdapter(child: SizedBox(height: 20)),
@@ -128,9 +169,20 @@ class _BookingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCancelled = session.isCancelled;
     final isUpcoming = session.isUpcoming;
-    final statusColor = isUpcoming ? const Color(0xFF047418) : Colors.red;
-    final statusLabel = isUpcoming ? "Upcoming" : "Past";
+    final Color statusColor;
+    final String statusLabel;
+    if (isCancelled) {
+      statusColor = Colors.red;
+      statusLabel = "Cancelled";
+    } else if (isUpcoming) {
+      statusColor = const Color(0xFF047418);
+      statusLabel = "Upcoming";
+    } else {
+      statusColor = Colors.red;
+      statusLabel = "Past";
+    }
 
     final date = session.scheduledAt;
     final dateStr = "${date.day}/${date.month}/${date.year}";

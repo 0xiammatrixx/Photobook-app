@@ -28,8 +28,9 @@ class _CountUpTextState extends State<CountUpText> {
   void initState() {
     super.initState();
     
-    // Calculate how many steps we need and timing
-    _totalSteps = widget.endValue;
+    // Calculate how many steps we need and timing.
+    // Guard against endValue == 0 to avoid IntegerDivisionByZeroException.
+    _totalSteps = widget.endValue > 0 ? widget.endValue : 1;
     _stepDuration = widget.duration.inMilliseconds ~/ _totalSteps;
     
     // Ensure minimum step duration for smooth animation
