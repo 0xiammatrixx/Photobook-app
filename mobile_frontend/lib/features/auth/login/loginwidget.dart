@@ -126,9 +126,11 @@ class _LoginFormState extends State<LoginForm> {
           MaterialPageRoute(builder: (_) => nextPage),
         );
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Google login failed')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_authService.lastError ?? 'Google login failed'),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => isLoading = false);

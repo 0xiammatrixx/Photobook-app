@@ -7,6 +7,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AuthService {
   static const String baseUrl = 'https://api.photobookhq.com/api/auth';
 
+  /// Last error message from a failed auth call (for showing in the UI).
+  String? lastError;
+
+  /// Extract a human-readable message from a JSON error body.
+  static String? messageFromBody(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      final msg = decoded['message'] ?? decoded['error'];
+      return (msg is String && msg.trim().isNotEmpty) ? msg : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     // On Android, `clientId` makes the SDK return an ID token (aud = web
     // client). On iOS we leave it unset so it uses the iOS GIDClientID from
@@ -53,7 +67,9 @@ class AuthService {
     }
   }
 
-  Future<bool> signup(String name, String email, String password) async {
+  /// Returns null on success (account created, already exists, or created
+  /// but the verification email failed). Returns an error message otherwise.
+  Future<String?> signup(String name, String email, String password) async {
     try {
       final res = await http.post(
         Uri.parse('$baseUrl/signup'),
@@ -62,29 +78,30 @@ class AuthService {
       );
 
       if (res.statusCode == 200 || res.statusCode == 201) {
-        return true;
+        return null;
       } else if (res.statusCode == 400) {
-        final body = jsonDecode(res.body);
-        // Account created but email failed — treat as success, resend will handle it
-        if (body['message'].toString().contains('email') ||
-            body['message'].toString().contains('Failed to send')) {
+        final msg = messageFromBody(res.body) ?? '';
+        // Account created but the verification email failed — treat as success
+        // so the user can resend from the verification screen.
+        if (msg.contains('email') || msg.contains('Failed to send')) {
           print(
             "⚠️ Account created but email failed. Redirecting to verify...",
           );
-          return true; // navigate to verification so user can resend
+          return null;
         }
         print("❌ Signup failed (400): ${res.body}");
-        return false;
+        return msg.isNotEmpty ? msg : 'Signup failed. Please try again.';
       } else if (res.statusCode == 409) {
         print("⚠️ Email already exists");
-        return true; // already registered, go to verification to resend
+        return null; // already registered, go to verification to resend
       } else {
         print("❌ Signup failed (${res.statusCode}): ${res.body}");
-        return false;
+        return messageFromBody(res.body) ??
+            'Signup failed (${res.statusCode}). Please try again.';
       }
     } catch (e) {
       print("❌ Signup request error: $e");
-      return false;
+      return 'Network error. Please check your connection and try again.';
     }
   }
 
@@ -168,13 +185,17 @@ class AuthService {
       if (res.statusCode == 200 || res.statusCode == 201) {
         final data = jsonDecode(res.body);
         await saveAuthData(data['token'], data['user']);
+        lastError = null;
         return data; // ✅ return full data so caller can read role
       } else {
         print('Google login failed: ${res.body}');
+        lastError = messageFromBody(res.body) ??
+            'Google sign-in failed (${res.statusCode}). Please try again.';
         return null;
       }
     } catch (e) {
       print('Google sign in error: $e');
+      lastError = 'Google sign-in failed. Please try again.';
       return null;
     }
   }

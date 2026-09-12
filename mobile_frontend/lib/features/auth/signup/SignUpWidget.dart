@@ -37,7 +37,7 @@ class _SignUpFormState extends State<SignUpForm> {
 
   setState(() => isLoading = true);
 
-  final success = await _authService.signup(
+  final error = await _authService.signup(
     _nameController.text.trim(),
     _emailController.text.trim(),
     _passwordController.text.trim(),
@@ -47,7 +47,7 @@ class _SignUpFormState extends State<SignUpForm> {
 
   if (!mounted) return;                                                                                                                                                                                                                                                                                                                                                                                                          
 
-  if (success) {
+  if (error == null) {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -56,7 +56,7 @@ class _SignUpFormState extends State<SignUpForm> {
     );
   } else {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Signup failed. Please try again.')),
+      SnackBar(content: Text(error)),
     );
   }
 }
@@ -92,7 +92,9 @@ class _SignUpFormState extends State<SignUpForm> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google sign in failed')),
+        SnackBar(
+          content: Text(_authService.lastError ?? 'Google sign in failed'),
+        ),
       );
     }
   } finally {
